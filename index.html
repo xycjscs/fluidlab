@@ -2,162 +2,289 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<meta name="description" content="流体实验室 Fluid Lab v3 — 基于 PavelDoGreat WebGL Fluid Simulation 架构的浏览器实时 2D 纳维-斯托克斯仿真：涡街、射流、湍流、绕流阵列，障碍物交互、涡量辉光、Bloom、ACES 色调映射"/>
-<title>流体实验室 Fluid Lab v3 · 交互式流体力学仿真</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<meta name="description" content="流体实验室 Fluid Lab v4 — 风洞工程可视化：速度向量场 / 尾流涡街 / 科学色图 / 粒子轨迹 × 涡街、烟花、细雨、漩涡、对撞射流、自由搅动 × 10 套视觉皮肤"/>
+<title>流体实验室 v4 · 风洞流体模拟</title>
 <style>
-:root{--bg:#05070c;--panel:rgba(10,14,22,.85);--line:rgba(255,255,255,.09);--txt:#cfe0f5;--dim:#7a8ca8;--acc:#4da3ff;--acc2:#8b5cf6;}
+/* ================= 工程风变量（参考图复刻） ================= */
+:root{
+  --bg:#05070c;
+  --panel:#0d1320;
+  --panel-2:#121a28;
+  --line:rgba(125,155,205,.16);
+  --line-2:rgba(125,155,205,.30);
+  --text:#e9eef7;
+  --text-dim:#7f8aa0;
+  --text-faint:#59647a;
+  --accent:#4aa8ff;
+  --accent-soft:rgba(74,168,255,.22);
+  --accent-glow:rgba(74,168,255,.55);
+  --cyan:#38e6d0;
+  --value:#86ecff;
+  --danger:#ff6b6b;
+  --radius-sm:8px;
+  --radius-md:10px;
+  --radius-lg:14px;
+  --shadow-1:0 4px 18px rgba(0,0,0,.35);
+  --shadow-2:0 8px 32px rgba(0,0,0,.5);
+  --touch:44px;
+  --mono:12px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;overflow:hidden;background:var(--bg);
- font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--txt);}
-#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;}
+[hidden]{display:none!important}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.45;}
+button{font-family:inherit}
+
+/* ================= 顶栏 ================= */
+#topbar{position:fixed;top:0;left:0;right:0;z-index:30;height:52px;
+ display:flex;align-items:center;gap:10px;padding:0 14px;
+ background:linear-gradient(180deg,rgba(8,12,20,.98),rgba(8,12,20,.88));
+ border-bottom:1px solid var(--line);}
+.brand{font-size:15px;font-weight:800;letter-spacing:.5px;color:var(--text);white-space:nowrap;}
+.brand b{color:var(--accent);}
+.brand span{display:block;font-size:9px;font-weight:400;letter-spacing:2.5px;color:var(--text-faint);margin-top:1px;}
+.modes{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:4px 2px;}
+.modes::-webkit-scrollbar{display:none}
+.mbtn{min-height:36px;padding:0 13px;border-radius:999px;border:1px solid var(--line);
+ background:var(--panel-2);color:var(--text-dim);font-size:12.5px;cursor:pointer;white-space:nowrap;
+ transition:all .15s;flex:0 0 auto;}
+.mbtn:hover{border-color:var(--line-2);color:var(--text)}
+.mbtn.active{color:#fff;border-color:var(--accent);
+ background:linear-gradient(180deg,var(--accent-soft),rgba(74,168,255,.06));
+ box-shadow:0 0 0 1px var(--accent-soft),0 0 14px var(--accent-glow);font-weight:600;}
+.tbtn{min-height:36px;padding:0 12px;border-radius:10px;border:1px solid var(--line);
+ background:var(--panel-2);color:var(--text-dim);font-size:14px;cursor:pointer;flex:0 0 auto;transition:all .15s;}
+.tbtn:hover{border-color:var(--line-2);color:var(--text)}
+.tbtn.active{color:var(--accent);border-color:var(--accent)}
+
+/* ================= 画布框（圆角+黑边，参考图风格） ================= */
+#frame{position:fixed;z-index:10;left:12px;right:12px;top:60px;bottom:158px;
+ border-radius:18px;overflow:hidden;background:#000;
+ border:1px solid rgba(255,255,255,.05);box-shadow:var(--shadow-2);}
+#c{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;}
 #c.grab{cursor:grab}
 #c.grabbing{cursor:grabbing}
-#topbar{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;gap:10px;padding:10px 14px;flex-wrap:wrap;
- background:linear-gradient(180deg,rgba(5,7,12,.92) 0%,rgba(5,7,12,.45) 70%,transparent 100%);}
-.brand{font-size:15px;font-weight:800;letter-spacing:1px;line-height:1.15;white-space:nowrap;
- background:linear-gradient(90deg,#7cc4ff,#b58cff 60%,#ff9ecf);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
-.brand span{display:block;font-size:9.5px;font-weight:400;letter-spacing:2px;color:var(--dim);-webkit-text-fill-color:var(--dim);}
-.modes{display:flex;gap:6px;flex-wrap:wrap;}
-.btn{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.13);color:var(--txt);padding:6px 12px;border-radius:9px;
- cursor:pointer;font-size:12.5px;line-height:1.2;transition:all .15s;font-family:inherit;white-space:nowrap;}
-.btn:hover{background:rgba(124,196,255,.14);border-color:rgba(124,196,255,.4);}
-.btn.active{background:linear-gradient(135deg,#2f7cf6,#7c4dff);border-color:transparent;color:#fff;box-shadow:0 2px 12px rgba(80,120,255,.35);}
-.btn.danger:hover{background:rgba(255,90,90,.15);border-color:rgba(255,90,90,.4);}
-.btn.small{padding:5px 9px;font-size:11.5px;border-radius:7px;}
-.spacer{flex:1;}
-#panel{position:fixed;top:64px;right:12px;width:272px;max-height:calc(100% - 80px);overflow-y:auto;z-index:9;
- background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);
- border-radius:14px;padding:14px 16px;transition:transform .28s ease,opacity .28s;scrollbar-width:thin;}
-#panel.closed{transform:translateX(320px);opacity:0;pointer-events:none;}
-#panel h3{font-size:11px;color:var(--acc);letter-spacing:1.5px;margin:16px 0 6px;font-weight:700;}
-#panel h3:first-child{margin-top:2px;}
-.row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0;font-size:12px;}
-.row label{white-space:nowrap;}
-.row .val{color:var(--dim);font-size:11px;min-width:30px;text-align:right;}
-input[type=range]{-webkit-appearance:none;appearance:none;width:52%;height:4px;border-radius:2px;background:rgba(255,255,255,.14);outline:none;}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--acc);cursor:pointer;box-shadow:0 0 8px rgba(77,163,255,.6);}
-input[type=range]::-moz-range-thumb{width:13px;height:13px;border:none;border-radius:50%;background:var(--acc);cursor:pointer;}
-select{background:rgba(255,255,255,.07);color:var(--txt);border:1px solid var(--line);border-radius:7px;padding:4px 6px;font-size:12px;font-family:inherit;}
-.btnrow{display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;}
-.chips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0;}
-.chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.06);border:1px solid var(--line);
- border-radius:20px;padding:3px 6px 3px 9px;font-size:11px;}
-.chip b{color:var(--acc);font-weight:700;}
-.chip .x{cursor:pointer;color:var(--dim);padding:0 3px;font-size:12px;}
-.chip .x:hover{color:#ff6b6b;}
-.hint{font-size:11px;color:var(--dim);line-height:1.7;margin-top:10px;border-top:1px dashed var(--line);padding-top:9px;}
-.hint b{color:var(--txt);font-weight:600;}
-#stats{position:fixed;left:14px;bottom:10px;z-index:8;font-size:11px;color:rgba(190,214,255,.55);
- font-variant-numeric:tabular-nums;pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.8);}
-#toast{position:fixed;bottom:48px;left:50%;transform:translateX(-50%) translateY(6px);z-index:20;background:rgba(16,24,40,.94);
- border:1px solid rgba(124,196,255,.35);color:#dceaff;padding:10px 20px;border-radius:11px;font-size:13px;
- opacity:0;transition:all .3s;pointer-events:none;max-width:82vw;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.5);}
+
+/* ================= HUD 胶囊（参考图复刻） ================= */
+.hud{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:10px;
+ padding:6px 12px 6px 10px;background:rgba(20,26,38,.78);border:1px solid rgba(102,168,255,.18);
+ border-radius:999px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;
+ color:#7f8aa0;box-shadow:0 2px 10px rgba(0,0,0,.32);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+ pointer-events:none;z-index:20;}
+.hud-dot{width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px rgba(56,230,208,.75);flex:0 0 auto;}
+.hud-item{display:flex;align-items:baseline;gap:4px;}
+.hud-item span{font-size:11px;color:#7f8aa0;}
+.hud-item b{color:#fff;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.2px;}
+.hud-status{position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:6px;
+ padding:5px 10px;background:rgba(20,26,38,.72);border:1px solid rgba(102,168,255,.14);border-radius:999px;
+ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:#7f8aa0;pointer-events:none;z-index:20;}
+.hud-status b{color:#fff;font-weight:600;}
+
+/* ================= colorbar（标量色图） ================= */
+.colorbar{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;align-items:center;gap:4px;
+ pointer-events:none;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;color:#9fb0c8;z-index:20;}
+.colorbar .bar{width:12px;height:120px;border-radius:6px;border:1px solid rgba(255,255,255,.18);box-shadow:0 2px 10px rgba(0,0,0,.35);}
+.colorbar .label{font-variant-numeric:tabular-nums;padding:0 2px;}
+
+/* ================= 底部参数面板 ================= */
+#ui{position:fixed;left:12px;right:12px;bottom:12px;z-index:30;
+ display:flex;flex-direction:column;gap:8px;background:rgba(13,19,32,.86);
+ border:1px solid var(--line);border-radius:var(--radius-lg);padding:10px 12px;
+ box-shadow:var(--shadow-1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+.urow{display:flex;align-items:center;gap:14px;}
+.gtitle{font-size:10.5px;color:var(--text-faint);letter-spacing:.12em;margin-bottom:5px;user-select:none;white-space:nowrap;}
+.group{display:flex;flex-direction:column;min-width:0;}
+.group.grow{flex:1;min-width:0;}
+.chips{display:flex;gap:6px;}
+.chip{min-height:36px;padding:0 13px;border-radius:999px;border:1px solid var(--line);
+ background:var(--panel-2);color:var(--text-dim);font-size:12.5px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.chip:hover{border-color:var(--line-2);color:var(--text)}
+.chip.active{color:#fff;border-color:var(--accent);
+ background:linear-gradient(180deg,var(--accent-soft),rgba(74,168,255,.06));
+ box-shadow:0 0 0 1px var(--accent-soft),0 0 14px var(--accent-glow);font-weight:600;}
+.skins{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;padding:3px 1px;}
+.skins::-webkit-scrollbar{display:none}
+.skin-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:#101825;
+ cursor:pointer;position:relative;transition:transform .12s,box-shadow .12s;padding:0;flex:0 0 auto;}
+.skin-btn i{position:absolute;inset:4px;border-radius:50%;}
+.skin-btn:hover{transform:scale(1.08)}
+.skin-btn.active{transform:scale(1.1);box-shadow:0 0 0 2px var(--accent),0 0 12px var(--accent-glow);}
+.skin-btn .tip{position:absolute;bottom:110%;left:50%;transform:translateX(-50%);
+ background:rgba(16,22,34,.95);border:1px solid var(--line);color:var(--text);font-size:11px;
+ padding:3px 8px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;}
+.skin-btn:hover .tip{opacity:1}
+
+/* 参数行 */
+details.params{border-top:1px dashed var(--line);padding-top:8px;}
+details.params summary{list-style:none;cursor:pointer;font-size:10.5px;color:var(--text-faint);
+ letter-spacing:.12em;user-select:none;display:flex;align-items:center;gap:6px;}
+details.params summary::-webkit-details-marker{display:none}
+details.params summary::after{content:'▾';font-size:10px;transition:transform .2s;}
+details.params:not([open]) summary::after{transform:rotate(-90deg)}
+.controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding-top:9px;}
+.control{display:flex;align-items:center;gap:8px;min-width:200px;flex:1 1 200px;max-width:320px;}
+.eng-label{width:36px;font-size:12px;color:var(--text-dim);flex:0 0 auto;}
+.eng-value{min-width:56px;padding:6px 8px;border-radius:8px;background:#101825;border:1px solid var(--line);
+ color:var(--value);font-family:var(--mono);font-size:12px;text-align:right;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);
+ font-variant-numeric:tabular-nums;flex:0 0 auto;}
+input[type=range].eng{-webkit-appearance:none;appearance:none;flex:1;min-width:80px;height:var(--touch);
+ background:transparent;cursor:pointer;}
+input[type=range].eng::-webkit-slider-runnable-track{height:4px;border-radius:999px;
+ background:linear-gradient(to right,var(--accent) 0%,var(--accent) var(--fill,50%),#28334a var(--fill,50%),#28334a 100%);}
+input[type=range].eng::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;
+ background:var(--accent);border:2px solid rgba(234,246,255,.35);
+ box-shadow:0 0 0 4px rgba(74,168,255,.10),0 0 14px rgba(74,168,255,.65);}
+input[type=range].eng::-moz-range-track{height:4px;border-radius:999px;background:#28334a;}
+input[type=range].eng::-moz-range-progress{height:4px;border-radius:999px;background:var(--accent);}
+input[type=range].eng::-moz-range-thumb{width:18px;height:18px;border:2px solid rgba(234,246,255,.35);
+ border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(74,168,255,.10),0 0 14px rgba(74,168,255,.65);}
+select.eng-select{-webkit-appearance:none;appearance:none;min-height:38px;padding:0 32px 0 12px;border-radius:10px;
+ border:1px solid var(--line);
+ background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%234aa8ff' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 11px center,#101825;
+ color:var(--text);font-size:12.5px;cursor:pointer;}
+select.eng-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);}
+.pbtns{display:flex;gap:8px;flex:0 0 auto;}
+.pbtn{min-height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);
+ color:var(--text-dim);font-size:12.5px;cursor:pointer;transition:all .15s;}
+.pbtn:hover{border-color:var(--line-2);color:var(--text)}
+
+/* ================= toast / fallback ================= */
+#toast{position:fixed;bottom:calc(180px);left:50%;transform:translateX(-50%) translateY(6px);z-index:50;
+ background:rgba(16,24,40,.94);border:1px solid var(--accent-soft);color:#dceaff;padding:10px 20px;
+ border-radius:11px;font-size:13px;opacity:0;transition:all .3s;pointer-events:none;max-width:80vw;
+ text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.5);}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-#fallback{position:fixed;inset:0;z-index:99;display:none;align-items:center;justify-content:center;background:var(--bg);
- color:var(--txt);font-size:15px;padding:30px;text-align:center;line-height:2;}
+#fallback{position:fixed;inset:0;z-index:99;display:none;align-items:center;justify-content:center;
+ background:var(--bg);color:var(--text);font-size:15px;padding:30px;text-align:center;line-height:2;}
 #fallback.show{display:flex;}
-.btn{min-height:38px;}
-#panel .handle{display:none;width:44px;height:5px;border-radius:3px;background:rgba(255,255,255,.25);margin:2px auto 12px;}
-@media (max-width:700px){
- #panel{top:auto;bottom:0;right:0;left:0;width:100%;max-height:62vh;border-radius:16px 16px 0 0;padding-bottom:22px;}
- #panel .handle{display:block;}
- #panel.closed{transform:translateY(110%);}
- .brand span{display:none;}
- .brand{font-size:14px;}
- .modes{width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;}
- .btn{min-height:40px;font-size:13px;padding:8px 13px;flex:0 0 auto;}
- input[type=range]{width:56%;}
- input[type=range]::-webkit-slider-thumb{width:18px;height:18px;}
- input[type=range]::-moz-range-thumb{width:18px;height:18px;}
+
+/* ================= 移动端 ================= */
+@media (max-width:720px){
+ #topbar{height:50px;padding:0 10px;gap:8px;}
+ .brand{font-size:13px;}
+ .brand span{display:none}
+ .mbtn{min-height:34px;font-size:12px;padding:0 11px;}
+ #frame{left:8px;right:8px;top:56px;bottom:170px;border-radius:16px;}
+ .hud{font-size:10.5px;gap:8px;padding:5px 10px;}
+ .hud-status{display:none;}
+ .colorbar{flex-direction:row;right:10px;bottom:10px;}
+ .colorbar .bar{width:96px;height:10px;}
+ #ui{left:8px;right:8px;bottom:8px;padding:8px 10px;}
+ .urow{gap:10px;}
+ .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;flex:1;}
+ .chip{min-height:var(--touch);padding:0 4px;font-size:12px;text-align:center;}
+ .skins{max-width:118px;}
+ .skin-btn{width:30px;height:30px;}
+ .control{min-width:100%;max-width:none;}
+ .controls{gap:8px;}
+ details.params{display:none;}
+ body.params-open details.params{display:block;}
+ #toast{bottom:200px;}
 }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
 <div id="fallback">😢 您的浏览器不支持 WebGL，无法运行本仿真。<br>请使用最新版 Chrome / Edge / Firefox / Safari 打开。</div>
 
 <header id="topbar">
- <div class="brand">流体实验室 v3<span>FLUID LAB · 2D 纳维-斯托克斯 · 仿制 WebGL Fluid Simulation 架构</span></div>
+ <div class="brand"><b>流体实验室</b> v4<span>FLUID LAB · WIND TUNNEL</span></div>
  <div class="modes" id="modeBtns">
-  <button class="btn active" data-mode="vortex">🌀 涡街</button>
-  <button class="btn" data-mode="turb">🔥 湍流</button>
-  <button class="btn" data-mode="jet">💨 双射流</button>
-  <button class="btn" data-mode="array">🏞️ 绕流阵列</button>
-  <button class="btn" data-mode="free">🌊 自由</button>
+  <button class="mbtn active" data-mode="street">🌀 涡街</button>
+  <button class="mbtn" data-mode="fireworks">🎆 烟花</button>
+  <button class="mbtn" data-mode="rain">🌧️ 细雨</button>
+  <button class="mbtn" data-mode="vortex">🌪️ 漩涡</button>
+  <button class="mbtn" data-mode="jet">💥 对撞</button>
+  <button class="mbtn" data-mode="free">🌊 自由</button>
  </div>
- <div class="spacer"></div>
- <button class="btn" id="pauseBtn">⏸ 暂停</button>
- <button class="btn" id="clearBtn">🧹 清除</button>
- <button class="btn" id="panelBtn">⚙ 控制台</button>
+ <button class="tbtn" id="pauseBtn" title="暂停/继续">⏸</button>
+ <button class="tbtn" id="resetBtn" title="重置场">🧹</button>
 </header>
 
-<aside id="panel">
- <div class="handle"></div>
- <h3>流场控制</h3>
- <div class="row"><label>来流 / 驱动强度</label><input type="range" id="sWind" min="0" max="100" step="1" value="40"><span class="val" id="vWind">40</span></div>
- <div class="row"><label>涡量增强</label><input type="range" id="sVort" min="0" max="50" step="1" value="30"><span class="val" id="vVort">30</span></div>
- <div class="row"><label>黏滞衰减</label><input type="range" id="sVisc" min="0" max="2" step="0.05" value="0.20"><span class="val" id="vVisc">0.20</span></div>
- <div class="row"><label>染料消散</label><input type="range" id="sDye" min="0" max="4" step="0.1" value="1.0"><span class="val" id="vDye">1.0</span></div>
- <div class="row"><label>压力求解迭代</label><input type="range" id="sIter" min="4" max="60" step="1" value="20"><span class="val" id="vIter">20</span></div>
- <div class="row"><label>网格分辨率</label><input type="range" id="sRes" min="32" max="512" step="8" value="192"><span class="val" id="vRes">192</span></div>
- <div class="row"><label>泛光 Bloom</label><input type="range" id="sBloom" min="0" max="2" step="0.05" value="0.85"><span class="val" id="vBloom">0.85</span></div>
- <div class="row"><label>涡旋辉光</label><input type="range" id="sGlow" min="0" max="2" step="0.05" value="1.05"><span class="val" id="vGlow">1.05</span></div>
- <div class="row"><label>显示模式</label>
-  <select id="selMode"><option value="0">🎨 彩色染料</option><option value="1">➤ 速度矢量场</option><option value="2" selected>✦ 混合</option></select></div>
- <h3>障碍物</h3>
- <div class="row"><label>新障碍尺寸</label><input type="range" id="sSize" min="0.025" max="0.15" step="0.005" value="0.06"><span class="val" id="vSize">0.060</span></div>
- <div class="btnrow">
-  <button class="btn small" id="addCircle">⬤ 加圆形</button>
-  <button class="btn small" id="addBox">■ 加方块</button>
-  <button class="btn small" id="randObs">🎲 随机</button>
-  <button class="btn small danger" id="clearObs">✕ 全清</button>
+<div id="frame">
+ <canvas id="c"></canvas>
+ <div class="hud" id="hud">
+  <span class="hud-dot"></span>
+  <span class="hud-item"><span>FPS</span><b id="hudFps">--</b></span>
+  <span class="hud-item"><span>网格</span><b id="hudGrid">--</b></span>
+  <span class="hud-item"><span>风速</span><b id="hudWind">2.00</b></span>
  </div>
- <div class="chips" id="obList"></div>
- <div class="hint">
-  <b>操作指南</b><br>
-  · 拖动空白处：搅动流体并注入染料<br>
-  · 拖动障碍物移动 · 双击 / 长按：添加或删除<br>
-  · 滚轮悬停障碍物缩放（桌面）· Shift+拖动方块旋转<br>
-  · 右键删除障碍 · 空格：暂停/继续
+ <div class="hud-status" id="hudStatus">
+  <span><b id="hudMode">风洞</b></span><span>·</span>
+  <span><b id="hudSkin">工程风</b></span><span>·</span>
+  <span>染料 <b id="hudDye">--</b></span>
  </div>
-</aside>
+ <div class="colorbar" id="colorbar" hidden>
+  <span class="label" id="colorbarMax">12.0</span>
+  <div class="bar" id="colorbarBar"></div>
+  <span class="label" id="colorbarMin">0.0</span>
+ </div>
+</div>
 
-<div id="stats"></div>
+<div id="ui">
+ <div class="urow">
+  <div class="group">
+   <div class="gtitle">显示模式</div>
+   <div class="chips" id="viewChips">
+    <button class="chip active" data-view="wind">风洞</button>
+    <button class="chip" data-view="wake">尾流</button>
+    <button class="chip" data-view="scalar">色图</button>
+    <button class="chip" data-view="particle">粒子</button>
+   </div>
+  </div>
+  <div class="group grow">
+   <div class="gtitle">皮肤</div>
+   <div class="skins" id="skinBtns"></div>
+  </div>
+ </div>
+ <details class="params" id="params" open>
+  <summary>参数</summary>
+  <div class="controls">
+   <label class="control">
+    <span class="eng-label">风速</span>
+    <input class="eng" id="ctlWind" type="range" min="0" max="6" step="0.05" value="2.00">
+    <output class="eng-value" id="valWind">2.00</output>
+   </label>
+   <label class="control">
+    <span class="eng-label">涡量</span>
+    <input class="eng" id="ctlVort" type="range" min="0" max="2" step="0.05" value="1.00">
+    <output class="eng-value" id="valVort">1.00</output>
+   </label>
+   <label class="control" id="ctlScalarWrap" hidden>
+    <span class="eng-label">标量</span>
+    <select class="eng-select" id="ctlScalar">
+     <option value="speed">速度大小</option>
+     <option value="pressure">压力</option>
+     <option value="curl">涡量</option>
+    </select>
+   </label>
+   <label class="control" id="ctlCmapWrap" hidden>
+    <span class="eng-label">色图</span>
+    <select class="eng-select" id="ctlCmap">
+     <option value="viridis">Viridis</option>
+     <option value="turbo">Turbo</option>
+    </select>
+   </label>
+   <div class="pbtns">
+    <button class="pbtn" id="shareBtn">🔗 分享</button>
+    <button class="pbtn" id="defaultBtn">↺ 默认</button>
+   </div>
+  </div>
+ </details>
+</div>
+
 <div id="toast"></div>
-
 <script>
 'use strict';
-/* =====================================================================
- * 流体实验室 v3 — 仿制 PavelDoGreat "WebGL Fluid Simulation" (MIT) 架构
- *  - 半拉格朗日平流 + Jacobi 压力投影 + 涡量约束 (标准 Stam stable-fluids)
- *  - 染料/速度分离高分辨率场, 双 FBO ping-pong, blit 全视口四边形
- *  - 障碍物: SDF mask (r=0 固体 / 1 流体, g=归一化 SDF), no-flux 散度边界
- *    + 压力 Dirichlet + SDF 法向投影 (no-penetration)
- *  - 显示: SHADING 伪光照 + 2 级半分辨率高斯 Bloom + 涡量辉光 + ACES
- *    + 饱和度 + 暗角 + 代码生成蓝噪声 dithering
- *  - 运行时 RGBA16F 探测 (completeness + clear/readPixels 往返),
- *    失败回退 RGBA8 scale/offset 量化 (float 路径为恒等, 数值=标准 Stam)
- *  - Mesa llvmpipe 兼容: vertex/fragment 不共用 uniform 名
- * ===================================================================== */
+/* ======================================================================
+   流体实验室 v4 — 风洞流体模拟
+   架构：v3 Stam 半拉格朗日核心 + SDF 障碍物（保留）
+   显示：4 显示模式（风洞/尾流/色图/粒子）× 10 皮肤（工程风+9艺术）
+   物理：6 模式（涡街/烟花/细雨/漩涡/对撞/自由）+ AutoDirector 注入
+   设计蓝图：xhigh 4 轮深推（x4_out1..4.log）
+====================================================================== */
 
-/* ---------------- 错误捕获 ---------------- */
-function showErr(m){
-  try {
-    document.title = 'ERR: ' + m;
-    let d = document.getElementById('dbgerr');
-    if (!d) {
-      d = document.createElement('div');
-      d.id = 'dbgerr';
-      d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999;background:#a00;color:#fff;font:12px monospace;padding:8px;white-space:pre-wrap;';
-      document.body.appendChild(d);
-    }
-    d.textContent += m + '\n';
-  } catch(e){}
-  console.error(m);
-}
-window.onerror = function(m, s, l){ showErr(m + ' @' + l); };
-
+/* ---------------- 工具 ---------------- */
 function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
 function hsv(h, s, v){
   let r, g, b, i = Math.floor(h * 6), f = h * 6 - i;
@@ -172,8 +299,9 @@ function hsv(h, s, v){
   }
   return [r, g, b];
 }
+function hx(h){ h = h.replace('#',''); return [parseInt(h.slice(0,2),16)/255, parseInt(h.slice(2,4),16)/255, parseInt(h.slice(4,6),16)/255]; }
 
-/* ---------------- WebGL context + 浮点 FBO 探测 ---------------- */
+/* ---------------- WebGL context + 浮点 FBO 探测 (v3) ---------------- */
 function probeFloatFBO(gl, isWebGL2, halfFloatType) {
   let ok = false;
   try {
@@ -282,16 +410,15 @@ const ext = context.ext;
 const floatFields = ext.floatFields;
 const rgba8Internal = isWebGL2 ? gl.RGBA8 : gl.RGBA;
 
-/* 量化约定 (float 路径全部为恒等 → 数值精确等于标准 Stam):
-   velocity : stored = vOff + v / vSpan          (float 0/1 ; 8bit 0.5/64 → v∈[-32,32])
-   diverge  : stored = dOff + div * dScale       (float 0/1 ; 8bit 0.5/0.1 → div∈[-5,5])
-   pressure : stored = pOff + p * pScale         (float 0/1 ; 8bit 0.5/0.1 → p∈[-5,5])
-   curl     : stored = cOff + curl * cScale      (float 0/1 ; 8bit 0.5/0.02 → curl∈[-25,25])
-   dye      : 直接 0..1 (8bit clamp) / 线性可 >1 (float, 利于 bloom) */
+/* 量化约定 (v3, float 路径恒等):
+   velocity : stored = vOff + v / vSpan   (8bit 0.5/64 → v∈[-32,32] 格/秒)
+   curl     : stored = cOff + curl * cScale (8bit 0.5/0.02 → ±25)
+   pressure : stored = pOff + p * pScale   (8bit 0.5/0.1 → ±5)
+   dye      : r=强度(0..1, 8bit clamp) b=种子 */
 const Q = {
   vOff:  floatFields ? 0.0 : 0.5,
   vSpan: floatFields ? 1.0 : 64.0,
-  vMax:  floatFields ? 1000.0 : 32.0,
+  vMax:  floatFields ? 1e9 : 32.0,
   dOff:  floatFields ? 0.0 : 0.5,
   dScale:floatFields ? 1.0 : 0.1,
   dMax:  floatFields ? 1e9 : 5.0,
@@ -301,45 +428,51 @@ const Q = {
   cOff:  floatFields ? 0.0 : 0.5,
   cScale:floatFields ? 1.0 : 0.02,
   cMax:  floatFields ? 1e9 : 25.0,
-  dyeScale: floatFields ? 1.0 : 0.5,
   dyeClamp: floatFields ? 0.0 : 1.0
 };
 
-/* ---------------- config ---------------- */
+/* ---------------- config / state ---------------- */
 const isMobile = matchMedia('(max-width: 700px), (pointer: coarse)').matches;
+/* 8bit 路径 (无半浮点支持, 常见于软件渲染/弱 GPU): 默认网格 128 (v4 显示 pass 比 v3 重, 128 稳定 45+ FPS) */
+const SIM_RES_DEFAULT = (isMobile || !floatFields) ? 128 : 192;
 let dyeRes = isMobile ? 512 : 1024;
+let dyeResScale = 1.0;   // 自适应降质: 1.0 → 0.75 → 0.5
 const config = {
-  SIM_RESOLUTION: isMobile ? 128 : 192,
+  SIM_RESOLUTION: SIM_RES_DEFAULT,
   DENSITY_DISSIPATION: 0.30,
   VELOCITY_DISSIPATION: 0.20,
   PRESSURE: 0.7,
-  PRESSURE_ITERATIONS: 20,
-  CURL: 30,
-  SPLAT_FORCE: floatFields ? 6000 : 1500,
+  PRESSURE_ITERATIONS: 20,   /* xhigh 第5轮: 8bit 14→20 对齐 v3 (欠迭代抹掉相干涡核) */
+  CURL: 42,
   PAUSED: false,
   BLOOM: true,
   BLOOM_RESOLUTION: isMobile ? 192 : 256,
   BLOOM_INTENSITY: 0.85,
   BLOOM_THRESHOLD: 0.60,
-  BLOOM_SOFT_KNEE: 0.70,
-  displayMode: 2,
-  glow: 1.05,
-  wind: 40
+  BLOOM_SOFT_KNEE: 0.70
 };
 
-/* ---------------- 状态 ---------------- */
-let pointers = [];
+const state = {
+  view: 'wind',          // wind | wake | scalar | particle
+  skin: 'engineering',   // 10 皮肤
+  scalarField: 'speed',  // speed | pressure | curl
+  colormap: 'viridis'    // viridis | turbo
+};
+
 let pointerQueue = [];
-let splatStack = [];
 let obstacles = [];
 let maskDirty = true;
-let mode = 'vortex';
-let hueBase = Math.random();
-let nextSize = 0.06;
+let mode = 'street';
+let nextSize = 0.05;
 
-/* ---------------- shaders (GLSL 300 es) ----------------
- * 命名约定: vertex 侧统一 texelSize; fragment 侧一律 fTexelSize /
- * fDyeTexelSize / uDyeTexel, 杜绝 Mesa 同名 uniform 链接失败。 */
+/* 量纲换算 (xhigh 第3轮): vel 单位 = 速度网格 texel/秒
+   表值 0.42 * 48 = 20.2 格/秒 @ SIM192 (v3 标定值) */
+const WIND_K = 48, IMPULSE_K = 8;
+function simScale() { return clamp(config.SIM_RESOLUTION / 192, 0.3, 2.0); }
+function windMul()  { return (parseFloat(document.getElementById('ctlWind').value) || 2.0) / 2.0; }
+function vortMul()  { return parseFloat(document.getElementById('ctlVort').value) || 1.0; }
+
+/* ---------------- shaders (GLSL 300 es) ---------------- */
 const VERT_BASE = `#version 300 es
 precision highp float;
 layout(location = 0) in vec2 aPosition;
@@ -409,6 +542,7 @@ void main() {
   FragColor = vec4(uOff + (x - uOff) * uValue, 0.0, 0.0, 1.0);
 }`;
 
+/* splat: velocity 场 / dye 场 通用 (v3)。dye 通道 r=强度 b=种子 */
 const FRAG_SPLAT = `#version 300 es
 precision highp float;
 precision highp sampler2D;
@@ -443,15 +577,24 @@ void main() {
   }
 }`;
 
+/* 统一风场 (v4): 均匀背景风 + 中心涡风 + 左右对撞, 指数 relax */
 const FRAG_WIND = `#version 300 es
 precision highp float;
 precision highp sampler2D;
 in vec2 vUv;
 uniform sampler2D uVelocity;
 uniform sampler2D uObstacle;
-uniform float uWindX;
+uniform vec2 uBaseWind;
+uniform float uVortexMode;
+uniform vec2 uVortexCenter;
+uniform float uVortexSpeed;
+uniform float uVortexDecay;
+uniform float uSplitMode;
+uniform float uSplitSpeed;
 uniform float uRelax;
 uniform float uDt;
+uniform float uObsLeft;
+uniform float uWakeKeep;
 uniform float uVOff;
 uniform float uVSpan;
 uniform float uVMax;
@@ -460,8 +603,23 @@ void main() {
   vec4 ob = texture(uObstacle, vUv);
   if (ob.x < 0.5) { FragColor = vec4(uVOff, uVOff, 0.0, 1.0); return; }
   vec2 v = (texture(uVelocity, vUv).xy - uVOff) * uVSpan;
-  float k = 1.0 - exp(-uRelax * uDt);
-  v.x = mix(v.x, uWindX, k);
+  vec2 target = uBaseWind;
+  if (uVortexMode > 0.001) {
+    vec2 d = vUv - uVortexCenter;
+    float dist = length(d);
+    vec2 tang = dist > 1e-4 ? normalize(vec2(-d.y, d.x)) : vec2(0.0);
+    target += tang * uVortexSpeed * exp(-dist * max(uVortexDecay, 0.0)) * uVortexMode;
+  }
+  if (uSplitMode > 0.001) {
+    vec2 side = vUv.x < 0.5 ? vec2(1.0, 0.0) : vec2(-1.0, 0.0);
+    target += side * uSplitSpeed * uSplitMode;
+  }
+  target = clamp(target, -uVMax, uVMax);
+  float k = 1.0 - exp(-max(uRelax, 0.0) * max(uDt, 0.0));
+  /* xhigh 第5轮: 障碍物下游(尾流区)只保留 3% relax, 避免全域 6/s 阻尼抹掉相干涡 */
+  float upstream = 1.0 - smoothstep(uObsLeft - 0.05, uObsLeft + 0.015, vUv.x);
+  k *= mix(uWakeKeep, 1.0, upstream);
+  v = mix(v, target, k);
   v = clamp(v, -uVMax, uVMax);
   FragColor = vec4(v / uVSpan + uVOff, 0.0, 1.0);
 }`;
@@ -494,8 +652,6 @@ vec4 bilerp(sampler2D sam, vec2 uv, vec2 tsize) {
   return mix(mix(a, b, fuv.x), mix(c, d, fuv.x), fuv.y);
 }
 void main() {
-  /* 位移用速度网格 texel (fVelTexel), 采样源场用源网格 texel (fDyeTexelSize)
-   * 两网格分辨率相同时二者相等, 退化为经典算法 */
   vec2 vel = (bilerp(uVelocity, vUv, fVelTexel).xy - uVOff) * uVSpan;
   vec2 coord = vUv - dt * vel * fVelTexel;
   vec4 result = bilerp(uSource, coord, fDyeTexelSize);
@@ -639,7 +795,7 @@ void main() {
   if (gradLen > 1e-5) {
     vec2 n = grad / gradLen;
     float vn = dot(v, n);
-    if (vn < 0.0) v -= vn * n;   /* no-penetration: 只消指向固体内部的法向分量 */
+    if (vn < 0.0) v -= vn * n;
   }
   v = clamp(v, -uVMax, uVMax);
   FragColor = vec4(v / uVSpan + uVOff, 0.0, 1.0);
@@ -720,123 +876,325 @@ void main() {
   FragColor = vec4(c, 0.0);
 }`;
 
-const FRAG_DISPLAY = `#version 300 es
+/* ---------- 显示 shader 公共片段 (v4 第4轮) ----------
+   障碍物 mask 约定: r=流体(1)/固体(0), g=SDF带, b=有符号距离(0.5+2d, uv 单位) */
+const VIEW_COMMON = `
+uniform sampler2D uVelocity;
+uniform sampler2D uObstacle;
+uniform sampler2D uCurl;
+uniform float uVelOff;
+uniform float uVelSpan;
+uniform float uCurlOff;
+uniform float uCurlScale;
+uniform float uVelVisScale;
+uniform vec3 uObstacleA;
+uniform vec3 uObstacleB;
+uniform vec3 uObstacleEdge;
+uniform float uBloomStr;
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float sdfOf(vec4 ob) { return (ob.b - 0.5) * 0.5; }
+float solidOf(vec4 ob) { return 1.0 - smoothstep(-0.004, 0.004, sdfOf(ob)); }
+vec3 obstacleColor(vec4 ob) {
+  float d = sdfOf(ob);
+  float body = smoothstep(-0.14, -0.008, d);
+  vec3 c = mix(uObstacleA, uObstacleB, body);
+  float edge = 1.0 - smoothstep(0.0, 0.010, abs(d));
+  c = mix(c, uObstacleEdge, edge * 0.55);
+  return c;
+}
+vec2 dequantVel(vec2 q) { return (q - uVelOff) * uVelSpan; }
+`;
+
+/* 显示模式 A: 风洞 (默认, 复刻参考图) */
+const FRAG_VIEW_WIND = `#version 300 es
 precision highp float;
 precision highp sampler2D;
 in vec2 vUv;
-in vec2 vL;
-in vec2 vR;
-in vec2 vT;
-in vec2 vB;
-uniform sampler2D uDye;
-uniform sampler2D uVelocity;
-uniform sampler2D uCurl;
-uniform sampler2D uObstacle;
-uniform sampler2D uBloom;
-uniform sampler2D uDithering;
-uniform vec2 uDyeTexel;
-uniform vec2 uDitherScale;
-uniform float uExposure;
-uniform float uSaturation;
-uniform float uVignette;
-uniform float uBloomStr;
-uniform float uGlowStr;
-uniform float uGlowRange;
-uniform float uGlowCoreGain;
-uniform float uGlowSign;
-uniform float uCurlScale;
-uniform float uCurlOff;
-uniform float uVelScale;
-uniform vec2 uVelOff;
-uniform vec3 uObstacleColor;
 out vec4 FragColor;
-vec3 acesTonemap(vec3 x) {
-  const float a = 2.51; const float b = 0.03;
-  const float c = 2.43; const float d = 0.59; const float e = 0.14;
-  return clamp((x * (x * a + b)) / (x * (x * c + d) + e), 0.0, 1.0);
+${''}uniform sampler2D uDye;
+uniform sampler2D uBloom;
+uniform vec2 uResolution;
+uniform vec2 uVelToPx;
+uniform vec3 uWindLow;
+uniform vec3 uWindMid;
+uniform vec3 uWindHigh;
+uniform vec3 uStreakLow;
+uniform vec3 uStreakHigh;
+uniform vec3 uSmoke0;
+uniform vec3 uSmoke1;
+uniform float uStreakSpacing;
+uniform float uStreakWidth;
+uniform float uStreakAlpha;
+uniform float uStreakMinPx;
+uniform float uStreakMaxPx;
+uniform float uWindXBias;
+uniform float uCurlLow;
+uniform float uCurlHigh;
+uniform float uSmokeAlpha;
+uniform float uDyeGain;
+uniform float uVignette;
+${VIEW_COMMON}
+vec3 ramp3(vec3 a, vec3 b, vec3 c, float t) {
+  t = clamp(t, 0.0, 1.0);
+  if (t < 0.5) return mix(a, b, t * 2.0);
+  return mix(b, c, (t - 0.5) * 2.0);
 }
-float luma(vec3 x) { return dot(x, vec3(0.2126, 0.7152, 0.0722)); }
+float sdSegment(vec2 p, float halfLen, vec2 dir) {
+  float t = clamp(dot(p, dir), -halfLen, halfLen);
+  return length(p - dir * t);
+}
 void main() {
-  vec3 c = texture(uDye, vUv).rgb;
-  float obSolid = 0.0;
-  float obG = 1.0;
-#ifdef OBSTACLES
-  vec4 obc = texture(uObstacle, vUv);
-  obSolid = 1.0 - obc.r;
-  obG = obc.g;
-  c = mix(c, uObstacleColor, obSolid);
-  float rim = obSolid * (1.0 - smoothstep(0.0, 0.30, abs(obG - 0.5)));
-  c += vec3(0.30, 0.38, 0.52) * rim;
-#endif
-#ifdef VEL_FIELD
-  vec2 velF = (texture(uVelocity, vUv).xy - uVelOff) * uVelScale;
-  float speedF = length(velF);
-  vec2 dirF = speedF > 1e-4 ? velF / speedF : vec2(0.0);
-  vec3 vcol = vec3(0.35, 0.62, 0.95) * 0.55 + vec3(dirF.x, dirF.y, 0.0) * 0.30 + 0.22;
-  float lumF = 1.0 - exp(-speedF * 0.05);
-  c = vcol * lumF + c * 0.08;
-#endif
-#ifdef SHADING
-  vec3 lc = texture(uDye, vL).rgb;
-  vec3 rc = texture(uDye, vR).rgb;
-  vec3 tc = texture(uDye, vT).rgb;
-  vec3 bc = texture(uDye, vB).rgb;
-  float dx = length(rc) - length(lc);
-  float dy = length(tc) - length(bc);
-  float texelLen = max(length(uDyeTexel), 0.0001);
-  vec3 n = normalize(vec3(dx, dy, texelLen));
-  vec3 lightDir = normalize(vec3(-0.35, -0.45, 1.0));
-  float diffuse = clamp(dot(n, lightDir) + 0.72, 0.72, 1.0);
-  c *= diffuse;
-  vec2 velS = (texture(uVelocity, vUv).xy - uVelOff) * uVelScale;
-  float speedS = length(velS);
-  float sheen = speedS / (speedS + 0.35);
-  c += vec3(0.025, 0.045, 0.075) * sheen;
-#endif
-#ifdef VEL_MIX
-  vec2 velM = (texture(uVelocity, vUv).xy - uVelOff) * uVelScale;
-  float speedM = length(velM);
-  c += vec3(0.30, 0.50, 0.85) * clamp(speedM * 0.02, 0.0, 0.5);
-#endif
-#ifdef VORTEX_GLOW
-  float rawCurl = texture(uCurl, vUv).r;
-  float curlVal = (rawCurl - uCurlOff) * uCurlScale * uGlowSign;
-  float glowRange = max(uGlowRange, 0.0001);
-  float pos = smoothstep(0.0, glowRange, curlVal);
-  float neg = smoothstep(0.0, glowRange, -curlVal);
-  float core = 1.0 - exp(-abs(curlVal) * max(uGlowCoreGain, 0.0));
-  vec3 glowTint = vec3(0.05, 1.00, 1.00) * pos + vec3(1.00, 0.10, 0.85) * neg;
-  c += glowTint * core * uGlowStr;
-  c += vec3(1.0, 1.0, 1.0) * core * uGlowStr * 0.35;
-#endif
-#ifdef BLOOM
-  c += texture(uBloom, vUv).rgb * uBloomStr;
-#endif
-  c *= uExposure;
-#ifdef ACES
-  c = acesTonemap(c);
-#endif
-#ifdef SATURATION
-  float lum = luma(c);
-  c = mix(vec3(lum), c, clamp(uSaturation, 0.0, 3.0));
-#endif
-#ifdef VIGNETTE
-  vec2 d = vUv - vec2(0.5);
-  c *= 1.0 - uVignette * smoothstep(0.25, 1.05, length(d) * 2.0);
-#endif
-  c = clamp(c, 0.0, 1.0);
-  float noise = texture(uDithering, vUv * uDitherScale).r;
-  c += (noise * 2.0 - 1.0) * (1.0 / 255.0);
-  c = clamp(c, 0.0, 1.0);
-  FragColor = vec4(c, 1.0);
+  /* 1. 速度底图: |vel| 为主 + 少量 x 方向偏置 (工程渐变感) */
+  vec2 vel = dequantVel(texture(uVelocity, vUv).xy);
+  float speed = length(vel);
+  float speedN = clamp(speed / max(uVelVisScale, 1e-3), 0.0, 1.0);
+  float xN = clamp(vel.x / max(uVelVisScale, 1e-3), 0.0, 1.0);
+  float baseT = mix(speedN, xN, uWindXBias);
+  baseT = baseT * baseT * (3.0 - 2.0 * baseT); /* smoothstep: 消除快慢流之间的硬色界 */
+  vec3 col = ramp3(uWindLow, uWindMid, uWindHigh, baseT);
+
+  /* 2. 尾流烟雾: |curl| 主信号 + dye 增强 (4-tap 平滑去 8bit 量化尖峰) */
+  vec2 dTex = 1.0 / vec2(textureSize(uDye, 0));
+  vec2 cTex = 1.0 / vec2(textureSize(uCurl, 0));
+  float curl = (0.25 * (texture(uCurl, vUv).r + texture(uCurl, vUv + vec2(cTex.x, 0.0)).r
+                     + texture(uCurl, vUv + vec2(0.0, cTex.y)).r + texture(uCurl, vUv - cTex).r) - uCurlOff) / uCurlScale;
+  float dyeI = 0.25 * (texture(uDye, vUv).r + texture(uDye, vUv + vec2(dTex.x, 0.0)).r
+                    + texture(uDye, vUv + vec2(0.0, dTex.y)).r + texture(uDye, vUv - dTex).r);
+  float curlN = smoothstep(3.0, 12.0, abs(curl));
+  float dyeN = smoothstep(0.06, 0.42, dyeI);
+  float smoke = clamp(curlN * 0.7 + dyeN * uDyeGain, 0.0, 1.0);
+  vec3 smokeCol = mix(uSmoke0, uSmoke1, smoothstep(0.30, 1.0, smoke));
+  col = mix(col, smokeCol, uSmokeAlpha * smoothstep(0.15, 0.65, smoke));
+
+  /* 3. 速度短线 streak (屏幕网格采样 + SDF 线段) */
+  vec4 ob = texture(uObstacle, vUv);
+  float solid = solidOf(ob);
+  float fluid = 1.0 - solid;
+  vec2 px = vUv * uResolution;
+  vec2 cell = floor(px / uStreakSpacing);
+  vec2 local = px - (cell + 0.5) * uStreakSpacing;
+  vec2 dir = vel * uVelToPx;
+  float dl = length(dir);
+  vec2 dirN = dl > 1e-5 ? dir / dl : vec2(1.0, 0.0);
+  float halfLen = 0.5 * (uStreakMinPx + (uStreakMaxPx - uStreakMinPx) * speedN);
+  float dist = sdSegment(local, halfLen, dirN);
+  float aa = 0.9; // 固定 AA 宽度 (不用 fwidth: 软件渲染下 derivative 极慢)
+  float line = (1.0 - smoothstep(0.5 * uStreakWidth - aa, 0.5 * uStreakWidth + aa, dist)) * fluid;
+  vec3 streakCol = mix(uStreakLow, uStreakHigh, speedN);
+  float lineA = uStreakAlpha * line * smoothstep(0.005, 0.05, speedN);
+  col = mix(col, streakCol, lineA);
+
+  /* 4. 障碍物覆盖 */
+  col = mix(col, obstacleColor(ob), solid);
+
+  /* 5. bloom + 暗角 + dither */
+  col += texture(uBloom, vUv).rgb * uBloomStr;
+  vec2 vd = vUv - 0.5;
+  col *= 1.0 - uVignette * smoothstep(0.3, 1.1, length(vd) * 2.0);
+  col += (hash12(gl_FragCoord.xy * 0.917 + 13.7) - 0.5) * 0.008;
+  FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
-/* ---------------- program / material 基础设施 ---------------- */
+
+/* 显示模式 B: 尾流烟雾 */
+const FRAG_VIEW_WAKE = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec2 vUv;
+out vec4 FragColor;
+uniform sampler2D uDye;
+uniform sampler2D uBloom;
+uniform vec3 uWakeBg;
+uniform vec3 uWakeLow;
+uniform vec3 uWakeMid;
+uniform vec3 uWakeHigh;
+uniform float uDyeGain;
+uniform float uCurlGain;
+uniform vec2 uCoreRange;
+uniform vec2 uCurlFade;
+${VIEW_COMMON}
+void main() {
+  vec4 dyeC = texture(uDye, vUv);
+  float dyeI = dyeC.r;
+  float curl = (texture(uCurl, vUv).r - uCurlOff) / uCurlScale;
+  float ac = abs(curl);
+  /* xhigh 第5轮: 涡核检测 (低阈值 0.8→3.2, 高值 fade) + 符号双色 (正=亮蓝, 负=紫) */
+  float core = smoothstep(uCoreRange.x, uCoreRange.y, ac)
+             * (1.0 - smoothstep(uCurlFade.x, uCurlFade.y, ac));
+  vec3 coreCol = mix(uWakeHigh, uWakeMid, curl * 0.5 + 0.5);
+  float curlN = smoothstep(0.8, 14.0, ac) * 0.5 + core * 0.5;
+  vec2 vel = dequantVel(texture(uVelocity, vUv).xy);
+  float speedN = clamp(length(vel) / max(uVelVisScale, 1e-3), 0.0, 1.0);
+  float intensity = clamp(dyeI * uDyeGain + curlN * uCurlGain, 0.0, 1.0);
+  intensity *= mix(1.0, 0.82, speedN * 0.5);
+  vec3 smoke = mix(mix(uWakeLow, uWakeMid, smoothstep(0.0, 0.55, intensity)),
+                   uWakeHigh, smoothstep(0.55, 1.0, intensity));
+  vec3 col = uWakeBg;
+  float alpha = smoothstep(0.02, 0.18, intensity) * 0.94;
+  col = mix(col, smoke, alpha);
+  /* 涡核提亮: 有染料更亮, 无染料保留弱核 (不依赖 dye>0 才可见) */
+  col += coreCol * core * (0.30 + 0.70 * dyeI) * 0.55;
+  /* 种子轻微色偏 (多样丰富) */
+  col *= 0.88 + 0.24 * dyeC.b * intensity;
+  vec4 ob = texture(uObstacle, vUv);
+  col = mix(col, obstacleColor(ob), solidOf(ob));
+  col += texture(uBloom, vUv).rgb * uBloomStr;
+  col += (hash12(gl_FragCoord.xy * 0.917 + 13.7) - 0.5) * 0.004;
+  FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`;
+
+/* 显示模式 C: 标量色图 (Viridis / Turbo) */
+const FRAG_VIEW_SCALAR = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec2 vUv;
+out vec4 FragColor;
+uniform sampler2D uPressure;
+uniform int uScalarField;
+uniform int uColormap;
+uniform float uScalarMin;
+uniform float uScalarMax;
+uniform float uPressureOff;
+uniform float uPressureScale;
+${VIEW_COMMON}
+vec3 viridis(float t) {
+  t = clamp(t, 0.0, 1.0);
+  vec3 c0 = vec3(0.266, 0.004, 0.329);
+  vec3 c1 = vec3(0.231, 0.322, 0.549);
+  vec3 c2 = vec3(0.129, 0.573, 0.549);
+  vec3 c3 = vec3(0.373, 0.784, 0.235);
+  vec3 c4 = vec3(0.992, 0.906, 0.145);
+  if (t < 0.25) return mix(c0, c1, t / 0.25);
+  if (t < 0.50) return mix(c1, c2, (t - 0.25) / 0.25);
+  if (t < 0.75) return mix(c2, c3, (t - 0.50) / 0.25);
+  return mix(c3, c4, (t - 0.75) / 0.25);
+}
+vec3 turbo(float t) {
+  t = clamp(t, 0.0, 1.0);
+  vec3 c0 = vec3(0.188, 0.071, 0.231);
+  vec3 c1 = vec3(0.275, 0.412, 0.690);
+  vec3 c2 = vec3(0.208, 0.718, 0.475);
+  vec3 c3 = vec3(0.961, 0.831, 0.259);
+  vec3 c4 = vec3(0.549, 0.176, 0.016);
+  if (t < 0.25) return mix(c0, c1, t / 0.25);
+  if (t < 0.50) return mix(c1, c2, (t - 0.25) / 0.25);
+  if (t < 0.75) return mix(c2, c3, (t - 0.50) / 0.25);
+  return mix(c3, c4, (t - 0.75) / 0.25);
+}
+void main() {
+  float val;
+  if (uScalarField == 0) {
+    vec2 v = dequantVel(texture(uVelocity, vUv).xy);
+    val = length(v);
+  } else if (uScalarField == 1) {
+    val = (texture(uPressure, vUv).r - uPressureOff) / uPressureScale;
+  } else {
+    val = (texture(uCurl, vUv).r - uCurlOff) / uCurlScale;
+  }
+  float t = clamp((val - uScalarMin) / max(uScalarMax - uScalarMin, 1e-5), 0.0, 1.0);
+  vec3 col = (uColormap == 1) ? turbo(t) : viridis(t);
+  vec4 ob = texture(uObstacle, vUv);
+  col = mix(col, obstacleColor(ob), solidOf(ob));
+  col += (hash12(gl_FragCoord.xy * 0.917 + 13.7) - 0.5) * 0.008;
+  FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`;
+
+/* 显示模式 D: 粒子轨迹 — update pass (ping-pong 密度场) */
+const FRAG_PARTICLE_UPDATE = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec2 vUv;
+out vec4 FragColor;
+uniform sampler2D uPrev;
+uniform float uDt;
+uniform float uDecay;
+uniform float uSpawnRate;
+uniform float uSpawnFreq;
+uniform float uPointRadius;
+uniform vec2 uSpawnGrid;
+uniform float uInjectGain;
+uniform vec3 uParticleColor;
+uniform float uTime;
+uniform vec2 uSimSize;
+${VIEW_COMMON}
+void main() {
+  /* 1. 按速度平流 + 衰减 */
+  vec2 vel = dequantVel(texture(uVelocity, vUv).xy);
+  vec2 adv = vUv - vel * uDt / max(uSimSize, vec2(1.0));
+  adv = clamp(adv, 0.0, 1.0);
+  vec3 prev = texture(uPrev, adv).rgb * uDecay;
+
+  /* 2. 离散粒子注入 (24Hz 切片 hash) */
+  vec2 gridUv = vUv * uSpawnGrid;
+  vec2 cell = floor(gridUv);
+  vec2 center = (cell + 0.5) / uSpawnGrid;
+  vec2 d = (vUv - center) * uSpawnGrid;
+  float rr = length(d);
+  float slice = floor(uTime * uSpawnFreq);
+  vec2 seed = vec2(slice * 911.0, slice * 713.0);
+  float r = hash12(cell + seed);
+  float aa = 0.25;
+  float kernel = 1.0 - smoothstep(uPointRadius - aa, uPointRadius + aa, rr);
+  float spawn = kernel * step(1.0 - uSpawnRate, r);
+
+  /* 3. 固体内不注入 */
+  float solid = solidOf(texture(uObstacle, vUv));
+  spawn *= 1.0 - solid;
+
+  prev += uParticleColor * spawn * uInjectGain;
+  prev = clamp(prev, 0.0, 1.0);
+  FragColor = vec4(prev, 1.0);
+}`;
+
+/* 显示模式 D: 粒子轨迹 — render pass */
+const FRAG_PARTICLE_RENDER = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec2 vUv;
+out vec4 FragColor;
+uniform sampler2D uParticles;
+uniform sampler2D uBloom;
+uniform vec3 uParticleBg;
+uniform float uParticleGain;
+uniform float uSubtract;
+${VIEW_COMMON}
+void main() {
+  vec3 p = texture(uParticles, vUv).rgb;
+  float lum = max(max(p.r, p.g), p.b);
+  vec3 col = (uSubtract > 0.5)
+    ? max(vec3(0.0), uParticleBg - p * uParticleGain)
+    : (uParticleBg + p * uParticleGain);
+  /* 高亮 core (供 bloom) */
+  if (uSubtract < 0.5)
+    col += vec3(pow(clamp(lum, 0.0, 1.0), 3.0)) * vec3(0.35, 0.65, 1.0) * 0.8;
+  vec4 ob = texture(uObstacle, vUv);
+  col = mix(col, obstacleColor(ob), solidOf(ob));
+  col += texture(uBloom, vUv).rgb * uBloomStr;
+  col += (hash12(gl_FragCoord.xy * 0.917 + 13.7) - 0.5) * 0.004;
+  FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`;
+
+/* ---------------- program 基础设施 (v3) ---------------- */
 function addKeywords(source, keywords) {
   if (!keywords || keywords.length === 0) return source;
   const lines = source.split('\n');
   let defs = '';
   for (let i = 0; i < keywords.length; i++) defs += '#define ' + keywords[i] + '\n';
   return lines[0] + '\n' + defs + lines.slice(1).join('\n');
+}
+
+let _lastErr = '';
+function showErr(msg) {
+  console.error(msg);
+  _lastErr = msg;
+  try {
+    const fb = document.getElementById('fallback');
+    fb.innerHTML = '😢 初始化失败：' + msg.replace(/</g, '&lt;') + '<br>请使用最新版 Chrome / Edge / Firefox / Safari 打开。';
+    fb.classList.add('show');
+  } catch (e) {}
 }
 
 function compileShader(type, source, keywords) {
@@ -973,21 +1331,13 @@ const pressureP = makeProgram(VERT_BASE, FRAG_PRESSURE);
 const gradientP = makeProgram(VERT_BASE, FRAG_GRADIENT);
 const bloomPreP = makeProgram(VERT_BASE, FRAG_BLOOM_PREFILTER);
 const blurP = makeProgram(VERT_BLUR, FRAG_BLUR);
+const viewWindP = makeProgram(VERT_BASE, FRAG_VIEW_WIND);
+const viewWakeP = makeProgram(VERT_BASE, FRAG_VIEW_WAKE);
+const viewScalarP = makeProgram(VERT_BASE, FRAG_VIEW_SCALAR);
+const particleUpdateP = makeProgram(VERT_BASE, FRAG_PARTICLE_UPDATE);
+const particleRenderP = makeProgram(VERT_BASE, FRAG_PARTICLE_RENDER);
 
-/* display: keywords 按显示模式动态构建 */
-let displayP = null;
-function ensureDisplayProgram() {
-  const kw = ['BLOOM', 'VORTEX_GLOW', 'ACES', 'SATURATION', 'VIGNETTE'];
-  if (obstacles.length > 0) kw.push('OBSTACLES');
-  if (config.displayMode === 1) kw.push('VEL_FIELD');
-  else { kw.push('SHADING'); if (config.displayMode === 2) kw.push('VEL_MIX'); }
-  const key = kw.sort().join('|');
-  if (displayP && displayP._key === key) return;
-  displayP = makeProgram(VERT_BASE, FRAG_DISPLAY, kw);
-  displayP._key = key;
-}
-
-/* ---------------- dithering 蓝噪声 (代码生成, 无外部图片) ---------------- */
+/* ---------------- dithering 蓝噪声 (v3) ---------------- */
 let dithering = null;
 function createDitheringTexture() {
   const size = 256;
@@ -1013,8 +1363,15 @@ function createDitheringTexture() {
 let dye = null, velocity = null, divergence = null, curl = null, pressure = null;
 let obstacleFBO = null;
 let bloomA = null, bloomB = null;
+let particleA = null, particleB = null;
+let particleGridX = 128, particleGridY = 72;
+let displayFBO = null;
+let dispScale = 1.0;   // displayFBO / 画布 的像素比例
 
 function initFramebuffers() {
+  /* 染料短边 = 画布短边 × dyeResScale (上限 1024): 弱 GPU/软件渲染友好 */
+  const cs = Math.min(canvas.width, canvas.height);
+  if (cs > 2) dyeRes = clamp(Math.round(cs * dyeResScale), 256, 1024);
   const simRes = getResolution(config.SIM_RESOLUTION);
   const dyeRes2 = getResolution(dyeRes);
   const texType = ext.texType;
@@ -1039,7 +1396,7 @@ function initFramebuffers() {
     velocity = resizeDoubleFBO(velocity, simRes.width, simRes.height, rg.internalFormat, rg.format, texType, filtering, velClear);
 
   divergence = createFBO(simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST, dClear);
-  curl = createFBO(simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST, cClear);
+  curl = createFBO(simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.LINEAR, cClear);
   pressure = createDoubleFBO(simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST, pClear);
 
   obstacleFBO = createFBO(simRes.width, simRes.height, rgba8Internal, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR);
@@ -1049,19 +1406,53 @@ function initFramebuffers() {
   bloomA = createFBO(bres.width, bres.height, rgba.internalFormat, rgba.format, texType, filtering, bClear);
   bloomB = createFBO(bres.width, bres.height, rgba.internalFormat, rgba.format, texType, filtering, bClear);
 
+  /* 显示 FBO: 软渲染/弱 GPU 走 0.65× 画布 (view shader 5 纹理采样, 是每帧最贵的 pass);
+     真 GPU (浮点路径) 直接全分辨率 */
+  dispScale = floatFields ? 1.0 : 0.65;
+  const dw = Math.max(2, Math.round(canvas.width * dispScale));
+  const dh = Math.max(2, Math.round(canvas.height * dispScale));
+  displayFBO = createFBO(dw, dh, rgba8Internal, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR, [0.0, 0.0, 0.0, 1.0]);
+
+  /* 粒子 FBO (最长边 1024 桌面 / 512 移动) */
+  if (particleA != null) {
+    const ar = gl.drawingBufferWidth / Math.max(1, gl.drawingBufferHeight);
+    const maxDim = isMobile ? 512 : 1024;
+    const pw = Math.max(64, ar >= 1 ? maxDim : Math.round(maxDim * ar));
+    const ph = Math.max(64, ar >= 1 ? Math.round(maxDim / ar) : maxDim);
+    if (particleA.width !== pw || particleA.height !== ph) {
+      const fmt = floatFields ? ext.formatRGBA : { internalFormat: rgba8Internal, format: gl.RGBA };
+      const type = floatFields ? ext.texType : gl.UNSIGNED_BYTE;
+      particleA = createFBO(pw, ph, fmt.internalFormat, fmt.format, type, gl.LINEAR);
+      particleB = createFBO(pw, ph, fmt.internalFormat, fmt.format, type, gl.LINEAR);
+    }
+  } else {
+    const ar = gl.drawingBufferWidth / Math.max(1, gl.drawingBufferHeight);
+    const maxDim = isMobile ? 512 : 1024;
+    const pw = Math.max(64, ar >= 1 ? maxDim : Math.round(maxDim * ar));
+    const ph = Math.max(64, ar >= 1 ? Math.round(maxDim / ar) : maxDim);
+    const fmt = floatFields ? ext.formatRGBA : { internalFormat: rgba8Internal, format: gl.RGBA };
+    const type = floatFields ? ext.texType : gl.UNSIGNED_BYTE;
+    particleA = createFBO(pw, ph, fmt.internalFormat, fmt.format, type, gl.LINEAR);
+    particleB = createFBO(pw, ph, fmt.internalFormat, fmt.format, type, gl.LINEAR);
+  }
+  particleGridX = isMobile ? 96 : 128;
+  particleGridY = Math.max(32, Math.round(particleGridX / Math.max(0.4, gl.drawingBufferWidth / Math.max(1, gl.drawingBufferHeight))));
+
   if (dithering == null) dithering = createDitheringTexture();
-  displayP = null;
   /* 任何 reinit 都会清零 obstacleFBO, 必须重绘 mask, 否则全场变"全固体" */
   maskDirty = true;
+  updateHudStatic();
 }
 
-/* ---------------- 障碍物 SDF mask ---------------- */
+/* ---------------- 障碍物 SDF mask (v4: b 通道存完整有符号距离) ---------------- */
 let maskData = null;
 function paintObstacleMask() {
   const W = obstacleFBO.width, H = obstacleFBO.height;
   if (!maskData || maskData.length !== W * H * 4) maskData = new Uint8Array(W * H * 4);
   const data = maskData;
   const soft = 0.03;
+  /* 宽高比校正: uv 空间 dx 乘以网格宽高比 → 屏幕上渲染为正圆 (否则被拉成横椭圆) */
+  const ar = W / H;
   for (let j = 0; j < H; j++) {
     const uy = 1.0 - (j + 0.5) / H;
     for (let i = 0; i < W; i++) {
@@ -1071,7 +1462,7 @@ function paintObstacleMask() {
         const ob = obstacles[k];
         let d;
         if (ob.shape === 'circle') {
-          const dx = ux - ob.x, dy = uy - ob.y;
+          const dx = (ux - ob.x) * ar, dy = uy - ob.y;
           d = Math.sqrt(dx*dx + dy*dy) - ob.r;
         } else {
           const dx = ux - ob.x, dy = uy - ob.y;
@@ -1088,7 +1479,8 @@ function paintObstacleMask() {
       const idx = (j * W + i) * 4;
       data[idx] = dMin < 0.0 ? 0 : 255;
       data[idx+1] = Math.max(0, Math.min(255, Math.round(255 * (0.5 + dMin / soft))));
-      data[idx+2] = 0;
+      /* v4: 完整 SDF (uv 单位, ±0.25 截断) 存入 b 通道供显示 shader 用 */
+      data[idx+2] = Math.max(0, Math.min(255, Math.round(255 * (0.5 + dMin * 2.0))));
       data[idx+3] = 255;
     }
   }
@@ -1099,18 +1491,18 @@ function paintObstacleMask() {
 function addObstacle(shape, x, y, r, rot) {
   obstacles.push({ shape, x, y, r, rot: rot || 0 });
   maskDirty = true;
-  renderObList();
 }
 function removeObstacle(i) {
   obstacles.splice(i, 1);
   maskDirty = true;
-  renderObList();
 }
 function hitObstacle(x, y) {
+  const ar = obstacleFBO ? obstacleFBO.width / obstacleFBO.height : 1.0;
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const ob = obstacles[i];
     if (ob.shape === 'circle') {
-      const dx = x - ob.x, dy = y - ob.y;
+      /* 与 SDF 一致: x 方向乘宽高比 (屏幕上正圆, uv 空间椭圆) */
+      const dx = (x - ob.x) * ar, dy = y - ob.y;
       if (dx*dx + dy*dy < (ob.r + 0.015) * (ob.r + 0.015)) return i;
     } else {
       const dx = x - ob.x, dy = y - ob.y;
@@ -1121,17 +1513,6 @@ function hitObstacle(x, y) {
   }
   return -1;
 }
-function renderObList() {
-  const el = document.getElementById('obList');
-  el.innerHTML = '';
-  obstacles.forEach((ob, i) => {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.innerHTML = (ob.shape === 'circle' ? '⬤' : '■') + ' <b>' + ob.r.toFixed(3) + '</b><span class="x">✕</span>';
-    chip.querySelector('.x').addEventListener('click', () => removeObstacle(i));
-    el.appendChild(chip);
-  });
-}
 function clearFields() {
   gl.bindFramebuffer(gl.FRAMEBUFFER, dye.read.fbo);
   gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
@@ -1141,9 +1522,13 @@ function clearFields() {
   gl.clearColor(Q.vOff, Q.vOff, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
   gl.bindFramebuffer(gl.FRAMEBUFFER, velocity.write.fbo);
   gl.clear(gl.COLOR_BUFFER_BIT);
+  if (particleA) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, particleA.fbo); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, particleB.fbo); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  }
 }
 
-/* ---------------- splat ---------------- */
+/* ---------------- splat (v3, dye: r=强度 b=种子) ---------------- */
 function correctRadius(radius) {
   const ar = canvas.width / canvas.height;
   if (ar > 1.0) radius *= ar;
@@ -1171,117 +1556,433 @@ function splat(x, y, dx, dy, cr, cg, cb, radius) {
   blit(dye.write); dye.swap();
 }
 
-function generateColor() {
-  const c = hsv(Math.random(), 0.9, 1.0);
-  const m = floatFields ? 0.35 : 0.6;
-  return [c[0]*m, c[1]*m, c[2]*m];
-}
-
-function splashBurst(n) {
-  for (let i = 0; i < n; i++) {
-    const x = 0.15 + 0.7 * Math.random(), y = 0.15 + 0.7 * Math.random();
-    const a = Math.random() * Math.PI * 2;
-    const f = 250 + Math.random() * 500;
-    const c = hsv((i / n + 0.5) % 1, 0.9, 1.0);
-    splat(x, y, Math.cos(a) * f, Math.sin(a) * f, c[0]*0.5, c[1]*0.5, c[2]*0.5, 0.008);
+/* ======================================================================
+   皮肤系统 (10): 工程风(默认,参考图锁定) + 9 艺术皮肤
+   皮肤 = 外观层: 底图 ramp / 矢量色 / 烟雾色 / 障碍物色 / UI accent
+====================================================================== */
+const SKINS = {
+  engineering: {
+    name:'工程风', accent:'#4aa8ff', value:'#86ecff',
+    obsA:'#cdd6d8', obsB:'#eef4f5', obsEdge:'#5f6b70',
+    /* 参考图配色: 快流(上游)=粉紫, 慢流(尾流)=深蓝, 烟雾=更深的蓝 → 蓝粉过渡自然 */
+    windLow:'#2b3fa8', windMid:'#7a5fd0', windHigh:'#d8a0d8',
+    streakLow:'#a03040', streakHigh:'#e05068',
+    smoke0:'#16225e', smoke1:'#0a0f2e',
+    wakeBg:'#070b14', wakeLow:'#0d163f', wakeMid:'#1b2a6b', wakeHigh:'#77b4ff',
+    pColor:'#59c7ff', pBg:'#070c16',
+    preview:'linear-gradient(135deg,#d8a0d8,#8fb4ff 42%,#4aa8ff 72%,#cdd6d8)'
+  },
+  neon: {
+    name:'霓虹', accent:'#38e6d0', value:'#baffef',
+    obsA:'#05121a', obsB:'#0d3446', obsEdge:'#38e6d0',
+    windLow:'#03151a', windMid:'#07343c', windHigh:'#0d5a6e',
+    streakLow:'#0a7a8a', streakHigh:'#38e6d0',
+    smoke0:'#0a4a5c', smoke1:'#052028',
+    wakeBg:'#020a0e', wakeLow:'#04303c', wakeMid:'#0a6a7c', wakeHigh:'#7dfff0',
+    pColor:'#7dfff0', pBg:'#02080c',
+    preview:'linear-gradient(135deg,#03151a,#38e6d0,#7a5cff)'
+  },
+  lava: {
+    name:'熔岩', accent:'#ff7a1a', value:'#ffd166',
+    obsA:'#2a0b06', obsB:'#ff7a1a', obsEdge:'#ffd166',
+    windLow:'#1c0603', windMid:'#4a1206', windHigh:'#8a3010',
+    streakLow:'#7a2a08', streakHigh:'#ff7a1a',
+    smoke0:'#5c1408', smoke1:'#2a0a04',
+    wakeBg:'#120301', wakeLow:'#3c0d04', wakeMid:'#8a2c08', wakeHigh:'#ffd166',
+    pColor:'#ffd166', pBg:'#100201',
+    preview:'linear-gradient(135deg,#2a0b06,#ff7a1a,#ffd166)'
+  },
+  ocean: {
+    name:'深海', accent:'#2f9cff', value:'#9be6ff',
+    obsA:'#02121f', obsB:'#0e4d68', obsEdge:'#7fd4ff',
+    windLow:'#02101d', windMid:'#0a2c48', windHigh:'#14507a',
+    streakLow:'#0e4a70', streakHigh:'#2f9cff',
+    smoke0:'#0e3c66', smoke1:'#051828',
+    wakeBg:'#010a14', wakeLow:'#062a48', wakeMid:'#0e5c8c', wakeHigh:'#9be6ff',
+    pColor:'#9be6ff', pBg:'#010810',
+    preview:'linear-gradient(135deg,#02121f,#0e4d68,#7fd4ff)'
+  },
+  ink: {
+    name:'水墨', accent:'#f2f2f2', value:'#ffffff',
+    obsA:'#1a1a1a', obsB:'#3a3a3a', obsEdge:'#000000',
+    windLow:'#f4f2ec', windMid:'#e2ded2', windHigh:'#c8c2b0',
+    streakLow:'#5a5a54', streakHigh:'#26261f',
+    smoke0:'#4a4a44', smoke1:'#1a1a16',
+    wakeBg:'#efece4', wakeLow:'#8a887c', wakeMid:'#44443c', wakeHigh:'#141410',
+    pColor:'#3a3a32', pBg:'#f0ede5',
+    inkInvert:true,
+    preview:'linear-gradient(135deg,#111,#666,#f2f2f2)'
+  },
+  nebula: {
+    name:'星云', accent:'#b479ff', value:'#e6ccff',
+    obsA:'#120724', obsB:'#5a2b8c', obsEdge:'#b479ff',
+    windLow:'#0d0418', windMid:'#2a1050', windHigh:'#4a2a80',
+    streakLow:'#5a2a90', streakHigh:'#b479ff',
+    smoke0:'#4a1e7a', smoke1:'#1c0a38',
+    wakeBg:'#080214', wakeLow:'#241050', wakeMid:'#5a2a96', wakeHigh:'#e6ccff',
+    pColor:'#e6ccff', pBg:'#060110',
+    preview:'linear-gradient(135deg,#120724,#5a2b8c,#b479ff)'
+  },
+  oil: {
+    name:'油膜', accent:'#66ffd6', value:'#eaffff',
+    obsA:'#061815', obsB:'#1d7a63', obsEdge:'#66ffd6',
+    windLow:'#041410', windMid:'#0d3a2e', windHigh:'#1d6a52',
+    streakLow:'#1d7a5c', streakHigh:'#66ffd6',
+    smoke0:'#166a50', smoke1:'#08281e',
+    wakeBg:'#02100c', wakeLow:'#0a3c2e', wakeMid:'#1d8a68', wakeHigh:'#eaffff',
+    pColor:'#a8ffe8', pBg:'#020c08',
+    preview:'linear-gradient(135deg,#061815,#1d7a63,#66ffd6)'
+  },
+  candy: {
+    name:'糖果', accent:'#ff7ac8', value:'#ffe1f4',
+    obsA:'#3a112a', obsB:'#ff7ac8', obsEdge:'#ffd166',
+    windLow:'#2a0d20', windMid:'#6a2a52', windHigh:'#a84878',
+    streakLow:'#c04890', streakHigh:'#ff7ac8',
+    smoke0:'#8a3a70', smoke1:'#2a1030',
+    wakeBg:'#180614', wakeLow:'#4a1a3c', wakeMid:'#a8488a', wakeHigh:'#ffe1f4',
+    pColor:'#ffd166', pBg:'#12040e',
+    preview:'linear-gradient(135deg,#ff7ac8,#ffd166,#7bd6ff)'
+  },
+  glitch: {
+    name:'故障', accent:'#ff2e5c', value:'#8affff',
+    obsA:'#0a0a0a', obsB:'#2a2a2a', obsEdge:'#ff2e5c',
+    windLow:'#080808', windMid:'#1c1220', windHigh:'#301830',
+    streakLow:'#a01840', streakHigh:'#ff2e5c',
+    smoke0:'#401030', smoke1:'#100814',
+    wakeBg:'#060608', wakeLow:'#201020', wakeMid:'#602040', wakeHigh:'#8affff',
+    pColor:'#8affff', pBg:'#050507',
+    preview:'linear-gradient(135deg,#0a0a0a,#ff2e5c,#8affff)'
+  },
+  ash: {
+    name:'灰烬', accent:'#9aa4b2', value:'#d7dde6',
+    obsA:'#15181c', obsB:'#3a4048', obsEdge:'#9aa4b2',
+    windLow:'#101216', windMid:'#22262c', windHigh:'#343a42',
+    streakLow:'#5a6470', streakHigh:'#9aa4b2',
+    smoke0:'#3a424c', smoke1:'#181c22',
+    wakeBg:'#0c0e12', wakeLow:'#22262e', wakeMid:'#4a525c', wakeHigh:'#d7dde6',
+    pColor:'#d7dde6', pBg:'#0a0c10',
+    preview:'linear-gradient(135deg,#15181c,#3a4048,#9aa4b2)'
   }
+};
+
+let skinPalette = null;   // 当前皮肤解析后的 uniform 值
+function currentSkin() { return SKINS[state.skin] || SKINS.engineering; }
+function applySkinPalette() {
+  const s = currentSkin();
+  skinPalette = {
+    obsA: hx(s.obsA), obsB: hx(s.obsB), obsEdge: hx(s.obsEdge),
+    windLow: hx(s.windLow), windMid: hx(s.windMid), windHigh: hx(s.windHigh),
+    streakLow: hx(s.streakLow), streakHigh: hx(s.streakHigh),
+    smoke0: hx(s.smoke0), smoke1: hx(s.smoke1),
+    wakeBg: hx(s.wakeBg), wakeLow: hx(s.wakeLow), wakeMid: hx(s.wakeMid), wakeHigh: hx(s.wakeHigh),
+    pColor: hx(s.pColor), pBg: hx(s.pBg)
+  };
+  const root = document.documentElement;
+  root.style.setProperty('--accent', s.accent);
+  root.style.setProperty('--value', s.value);
+  root.style.setProperty('--accent-soft', s.accent + '38');
+  root.style.setProperty('--accent-glow', s.accent + '8c');
 }
 
-/* ---------------- 模式注入 ---------------- */
-const LAYOUTS = {
-  free:   () => [{ shape:'circle', x:0.5, y:0.5, r:0.06, rot:0 }],
-  vortex: () => [{ shape:'circle', x:0.42, y:0.5, r:0.065, rot:0 }],
-  jet:    () => [],
-  array:  () => [
-    { shape:'circle', x:0.30, y:0.30, r:0.05, rot:0 },
-    { shape:'circle', x:0.30, y:0.70, r:0.05, rot:0 },
-    { shape:'circle', x:0.58, y:0.50, r:0.05, rot:0 }
-  ],
-  turb:   () => [
-    { shape:'circle', x:0.80, y:0.22, r:0.04, rot:0 },
-    { shape:'circle', x:0.24, y:0.82, r:0.04, rot:0 }
-  ]
+/* ======================================================================
+   物理模式 (6): 风场设置 + 参数 + 障碍物 + 注入器
+   量纲: 表值 * WIND_K(48) * simScale() * windMul() = 格/秒
+====================================================================== */
+const MODES = {
+  street: {
+    wind: { type:'uniform', baseX: 0.60, baseY: 0 },
+    curl: 30, diss: 0.28,
+    obstacles: [ { shape:'circle', x:0.35, y:0.5, r:0.050, rot:0 } ],
+    injector: { type:'street', interval: 0.18, x: 0.015, yBase: 0.5, yAmp: 0.02, yFreq: 1.3,
+                radius: 0.16, dye: 0.30, forceX: 0.15 },
+    prime: 2.5
+  },
+  fireworks: {
+    wind: { type:'none', baseX: 0, baseY: 0 },
+    curl: 18, diss: 0.34,
+    obstacles: [],
+    injector: { type:'fireworks', min: 1.4, max: 2.2, firstBurstDelay: 0.08,
+                xMin: 0.25, xMax: 0.75, yMin: 0.35, yMax: 0.65,
+                rays: 12, rayRadius: 0.045, rayDye: 1.1, rayForce: 2.4,
+                centerRadius: 0.08, centerDye: 1.3 },
+    prime: 0.6
+  },
+  rain: {
+    wind: { type:'uniform', baseX: 0, baseY: -0.22 },
+    curl: 12, diss: 0.42,
+    obstacles: [
+      { shape:'circle', x:0.44, y:0.90, r:0.020, rot:0 },
+      { shape:'circle', x:0.50, y:0.90, r:0.020, rot:0 },
+      { shape:'circle', x:0.56, y:0.90, r:0.020, rot:0 },
+      { shape:'circle', x:0.30, y:0.66, r:0.035, rot:0 },
+      { shape:'circle', x:0.72, y:0.68, r:0.035, rot:0 }
+    ],
+    injector: { type:'rain', rate: 10, y: 0.015, radius: 0.10, dye: 0.28, forceX: 0, forceY: -0.95 },
+    prime: 1.0
+  },
+  vortex: {
+    wind: { type:'vortex', center:[0.5,0.5], speed: 0.38, decay: 3.2 },
+    curl: 55, diss: 0.20,
+    obstacles: [ { shape:'circle', x:0.5, y:0.5, r:0.065, rot:0 } ],
+    injector: { type:'vortex', ringRadius: 0.17, emitters: 8, interval: 0.16,
+                radius: 0.12, dye: 0.42, force: 0.65 },
+    prime: 1.5
+  },
+  jet: {
+    wind: { type:'split', speed: 0.40 },
+    curl: 24, diss: 0.26,
+    obstacles: [ { shape:'circle', x:0.5, y:0.5, r:0.045, rot:0 } ],
+    injector: { type:'jet', interval: 0.12,
+                left: { x: 0.025, y: 0.5 }, right: { x: 0.975, y: 0.5 },
+                radius: 0.18, dye: 0.45, force: 1.05 },
+    prime: 1.0
+  },
+  free: {
+    wind: { type:'none', baseX: 0, baseY: 0 },
+    curl: 30, diss: 0.30,
+    obstacles: [],
+    injector: { type:'demo', interval: 2.5 },
+    prime: 0.2
+  }
 };
 const MODE_INFO = {
-  free:  '自由模式：拖动搅动流体，双击 / 长按画布添加障碍物',
-  vortex:'涡街演示：均匀来流绕过圆柱 → 观察卡门涡街（尾涡周期性脱落）',
-  jet:   '双射流：上下两股异色射流，剪切层失稳后卷起并合并',
-  array: '绕流阵列：来流绕过错列圆柱，观察多体尾涡干涉',
-  turb:  '湍流混沌：持续随机脉动驱动，观察涡旋生灭、卷吸与彩色搅拌'
+  street:    '涡街：均匀来流绕过圆柱，观察卡门涡街（尾涡周期性脱落）',
+  fireworks: '烟花：随机爆点向 12 个方向喷射，彩色冲击波扩散',
+  rain:      '细雨：雨滴持续下落，撞上障碍物溅起涟漪',
+  vortex:    '漩涡：中心切向风场 + 环形注染，形成旋转风暴',
+  jet:       '对撞：左右两股射流冲向中央障碍物，正面对撞',
+  free:      '自由：拖动搅动，双击/长按添加障碍物，尽情玩'
 };
 
-function injectDemo(dt) {
-  const f = clamp(dt, 0.001, 0.0166) * 60.0;
-  const now = performance.now() * 0.0006;
-  const wind = config.wind;
-  if (mode === 'vortex' || mode === 'array') {
-    const rows = 7;
-    for (let k = 0; k < rows; k++) {
-      const y = 0.07 + k * (0.86 / (rows - 1)) + 0.015 * Math.sin(now + k * 1.9);
-      const hue = (0.50 + 0.16 * Math.sin(now * 0.7 + k * 0.9) + (k / rows) * 0.10) % 1;
-      const c = hsv(hue, 0.9, 1.0);
-      const dA = wind * 0.011 * f;
-      splat(0.03, y, dA, 0.0, c[0]*0.45*f, c[1]*0.45*f, c[2]*0.45*f, 0.010);
-    }
-  } else if (mode === 'jet') {
-    const A = wind * 0.011 * f;
-    const cA = hsv(0.55, 0.9, 1.0), cB = hsv(0.02, 0.9, 1.0);
-    splat(0.03, 0.36, A, 0, cA[0]*0.35*f, cA[1]*0.35*f, cA[2]*0.35*f, 0.008);
-    splat(0.03, 0.64, A, 0, cB[0]*0.35*f, cB[1]*0.35*f, cB[2]*0.35*f, 0.008);
-  } else if (mode === 'turb') {
-    for (let k = 0; k < 5; k++) {
-      const x = 0.12 + 0.76 * Math.random();
-      const y = 0.12 + 0.76 * Math.random();
-      const a = Math.random() * Math.PI * 2;
-      const ff = (0.20 + 0.35 * Math.random()) * f * 35 * (wind / 40);
-      const hue = (hueBase + k * 0.09) % 1;
-      const c = hsv(hue, 0.9, 1.0);
-      splat(x, y, Math.cos(a)*ff, Math.sin(a)*ff, c[0]*0.45*f, c[1]*0.45*f, c[2]*0.45*f, 0.011);
-    }
-    hueBase = (hueBase + 0.0012 * f) % 1;
+/* 风场状态 (表值→格/秒 + 0.35s 指数平滑过渡) */
+const windState = { from:null, to:null, cur:null, t:1.0 };
+
+function computeWindTarget() {
+  const m = MODES[mode] || MODES.free;
+  const s = simScale() * windMul();
+  const st = { baseX:0, baseY:0, vortexOn:0, vCenter:[0.5,0.5], vSpeed:0, vDecay:3.2, splitOn:0, splitSpeed:0 };
+  const w = m.wind || {};
+  if (w.type === 'uniform') { st.baseX = w.baseX * WIND_K * s; st.baseY = w.baseY * WIND_K * s; }
+  else if (w.type === 'vortex') { st.vortexOn = 1; st.vCenter = w.center; st.vSpeed = w.speed * WIND_K * s; st.vDecay = w.decay; }
+  else if (w.type === 'split') { st.splitOn = 1; st.splitSpeed = w.speed * WIND_K * s; }
+  return st;
+}
+function mixWind(a, b, k) {
+  return {
+    baseX: a.baseX + (b.baseX - a.baseX) * k,
+    baseY: a.baseY + (b.baseY - a.baseY) * k,
+    vortexOn: a.vortexOn + (b.vortexOn - a.vortexOn) * k,
+    vCenter: [ a.vCenter[0] + (b.vCenter[0] - a.vCenter[0]) * k,
+               a.vCenter[1] + (b.vCenter[1] - a.vCenter[1]) * k ],
+    vSpeed: a.vSpeed + (b.vSpeed - a.vSpeed) * k,
+    vDecay: a.vDecay + (b.vDecay - a.vDecay) * k,
+    splitOn: a.splitOn + (b.splitOn - a.splitOn) * k,
+    splitSpeed: a.splitSpeed + (b.splitSpeed - a.splitSpeed) * k
+  };
+}
+function setWindTarget(smooth) {
+  const to = computeWindTarget();
+  if (!windState.cur) windState.cur = to;
+  if (smooth === false) { windState.from = to; windState.to = to; windState.cur = to; windState.t = 1.0; }
+  else { windState.from = mixWind(windState.cur, windState.cur, 1); windState.to = to; windState.t = 0.0; }
+}
+function updateWind(dt) {
+  if (!windState.cur) { windState.cur = computeWindTarget(); windState.from = windState.cur; windState.to = windState.cur; windState.t = 1; }
+  if (windState.t < 1.0) {
+    windState.t = Math.min(1.0, windState.t + dt / 0.35);
+    const k = 1.0 - Math.exp(-4.0 * windState.t);
+    windState.cur = mixWind(windState.from, windState.to, k);
   }
 }
 
-/* ---------------- step (标准 Stam 顺序 + 障碍物) ----------------
- * splats → curl → vorticity → SDF投影(pre) → advect vel
- * → divergence(no-flux) → clear pressure → Jacobi(Dirichlet)
- * → gradient subtract → SDF投影(post) → advect dye */
+/* ======================================================================
+   AutoDirector: 每模式注入 (染料 r=强度, b=种子)
+====================================================================== */
+const AutoDirector = {
+  nextBurst: 0, nextDrop: 0, nextStreet: 0, nextVortex: 0, nextJet: 0, nextDemo: 0, vortexIdx: 0,
+
+  setMode(modeId, nowMs) {
+    this.resetTimers(nowMs);
+  },
+  resetTimers(nowMs) {
+    const now = nowMs != null ? nowMs : performance.now();
+    const m = MODES[mode] || MODES.free;
+    this.vortexIdx = 0;
+    const inj = m.injector || {};
+    if (mode === 'fireworks') this.nextBurst = now + (inj.firstBurstDelay != null ? inj.firstBurstDelay : 0.08) * 1000;
+    if (mode === 'rain') this.nextDrop = now + 100;
+    if (mode === 'street') this.nextStreet = now + 100;
+    if (mode === 'vortex') this.nextVortex = now + 100;
+    if (mode === 'jet') this.nextJet = now + 100;
+    if (mode === 'free') this.nextDemo = now + 2500;
+  },
+
+  update(dt, nowMs) {
+    const f = IMPULSE_K * simScale();
+    switch (mode) {
+      case 'free': {
+        if (nowMs >= this.nextDemo) {
+          const x = 0.25 + Math.random() * 0.50, y = 0.25 + Math.random() * 0.50;
+          const a = Math.random() * Math.PI * 2, force = 0.30 + Math.random() * 0.30;
+          const seed = 0.1 + Math.random() * 0.8;
+          splat(x, y, Math.cos(a) * force * f, Math.sin(a) * force * f, 0.22, 0, seed, 0.014);
+          this.nextDemo = nowMs + 2500 + Math.random() * 500;
+        }
+        break;
+      }
+      case 'street': {
+        /* 7 行全高度注染 (对齐 v3 标定: 每行独立位置抖动+色相漂移 → 全高度尾流)
+           xhigh 第5轮: force 0.10f→0.22f (0.53→1.17 格/秒, 对齐 v3 的 1.77 量级) */
+        while (nowMs >= this.nextStreet) {
+          const rows = 7;
+          const t = nowMs * 0.0006;
+          for (let k = 0; k < rows; k++) {
+            const y = 0.07 + k * (0.86 / (rows - 1)) + 0.015 * Math.sin(t + k * 1.9);
+            const seed = clamp(0.5 + 0.3 * Math.sin(t * 0.7 + k * 0.9), 0.1, 0.9);
+            splat(0.03, y, 0.22 * f, 0, 0.45 * f, 0, seed, 0.010);
+          }
+          this.nextStreet += 17;
+          if (nowMs - this.nextStreet > 1000) { this.nextStreet = nowMs + 17; break; }
+        }
+        break;
+      }
+      case 'fireworks': {
+        if (nowMs >= this.nextBurst) {
+          const inj = MODES.fireworks.injector;
+          const cx = inj.xMin + Math.random() * (inj.xMax - inj.xMin);
+          const cy = inj.yMin + Math.random() * (inj.yMax - inj.yMin);
+          for (let i = 0; i < inj.rays; i++) {
+            const a = (i / inj.rays) * Math.PI * 2 + Math.random() * 0.18;
+            const seed = 0.15 + 0.7 * ((i * 0.618 + Math.random() * 0.1) % 1);
+            splat(cx + Math.cos(a) * 0.018, cy + Math.sin(a) * 0.018,
+                  Math.cos(a) * inj.rayForce * f, Math.sin(a) * inj.rayForce * f,
+                  inj.rayDye, 0, seed, inj.rayRadius);
+          }
+          splat(cx, cy, 0, 0, inj.centerDye, 0, 0.5, inj.centerRadius);
+          this.nextBurst = nowMs + (inj.min + Math.random() * (inj.max - inj.min)) * 1000;
+        }
+        break;
+      }
+      case 'rain': {
+        while (nowMs >= this.nextDrop) {
+          const x = Math.random(), seed = 0.5 + Math.random() * 0.4;
+          splat(x, 0.015 + Math.random() * 0.01, 0, MODES.rain.injector.forceY * f,
+                MODES.rain.injector.dye, 0, seed, MODES.rain.injector.radius);
+          this.nextDrop += 100;
+          if (nowMs - this.nextDrop > 500) { this.nextDrop = nowMs + 100; break; }
+        }
+        break;
+      }
+      case 'vortex': {
+        while (nowMs >= this.nextVortex) {
+          const inj = MODES.vortex.injector;
+          const idx = this.vortexIdx % inj.emitters;
+          const ang = (idx / inj.emitters) * Math.PI * 2 + Math.sin(nowMs * 0.0003) * 0.05;
+          const x = 0.5 + Math.cos(ang) * inj.ringRadius;
+          const y = 0.5 + Math.sin(ang) * inj.ringRadius;
+          const tx = -Math.sin(ang), ty = Math.cos(ang);
+          const seed = 0.2 + 0.6 * ((idx * 0.13) % 1);
+          splat(x, y, tx * inj.force * f, ty * inj.force * f, inj.dye, 0, seed, inj.radius);
+          this.vortexIdx++;
+          this.nextVortex += 160;
+          if (nowMs - this.nextVortex > 500) { this.nextVortex = nowMs + 160; break; }
+        }
+        break;
+      }
+      case 'jet': {
+        while (nowMs >= this.nextJet) {
+          const inj = MODES.jet.injector;
+          splat(inj.left.x, inj.left.y, inj.force * f, 0, inj.dye, 0, 0.30, inj.radius);
+          splat(inj.right.x, inj.right.y, -inj.force * f, 0, inj.dye, 0, 0.75, inj.radius);
+          this.nextJet += 120;
+          if (nowMs - this.nextJet > 500) { this.nextJet = nowMs + 120; break; }
+        }
+        break;
+      }
+    }
+  },
+
+  /* 预热: 模式启动前跑 N 个子步 (wind + inject + dye advect), 首屏就有内容 */
+  prime(seconds) {
+    const steps = Math.max(1, Math.min(90, Math.round(seconds * 30)));
+    const dt = clamp(seconds / steps, 0.008, 1/30);
+    const tx = velocity.texelSizeX, ty = velocity.texelSizeY;
+    for (let i = 0; i < steps; i++) {
+      const now = performance.now();
+      updateWind(dt);
+      applyWindPass(dt);
+      AutoDirector.update(dt, now);
+      /* dye advect only */
+      advectP.bind();
+      const u = advectP.uniforms;
+      gl.uniform2f(u.fVelTexel, tx, ty);
+      gl.uniform2f(u.fDyeTexelSize, dye.texelSizeX, dye.texelSizeY);
+      gl.uniform1f(u.dt, dt);
+      gl.uniform1f(u.dissipation, config.DENSITY_DISSIPATION);
+      gl.uniform1f(u.uField, 1.0);
+      gl.uniform1f(u.uVOff, Q.vOff); gl.uniform1f(u.uVSpan, Q.vSpan); gl.uniform1f(u.uVMax, Q.vMax);
+      gl.uniform1f(u.uDyeClamp, Q.dyeClamp);
+      gl.uniform1i(u.uObstacle, obstacleFBO.attach(2));
+      gl.uniform1i(u.uVelocity, velocity.read.attach(0));
+      gl.uniform1i(u.uSource, dye.read.attach(1));
+      blit(dye.write); dye.swap();
+    }
+  }
+};
+
+/* ======================================================================
+   step: v3 标准 Stam 顺序 + 统一风场 pass
+====================================================================== */
+function applyWindPass(dt) {
+  windP.bind();
+  const u = windP.uniforms;
+  const c = windState.cur;
+  gl.uniform2f(u.uBaseWind, c.baseX, c.baseY);
+  gl.uniform1f(u.uVortexMode, c.vortexOn);
+  gl.uniform2f(u.uVortexCenter, c.vCenter[0], c.vCenter[1]);
+  gl.uniform1f(u.uVortexSpeed, c.vSpeed);
+  gl.uniform1f(u.uVortexDecay, c.vDecay);
+  gl.uniform1f(u.uSplitMode, c.splitOn);
+  gl.uniform1f(u.uSplitSpeed, c.splitSpeed);
+  gl.uniform1f(u.uRelax, 6.0);
+  gl.uniform1f(u.uDt, dt);
+  /* xhigh 第5轮: 尾流保护 — 障碍物左缘 uv.x (圆: x - r/ar), 下游只保留 3% relax */
+  let obsLeft = 0.0;
+  for (let i = 0; i < obstacles.length; i++) {
+    const ob = obstacles[i];
+    const ar = obstacleFBO ? obstacleFBO.width / obstacleFBO.height : 1.0;
+    const left = ob.x - (ob.shape === 'circle' ? ob.r / ar : ob.r * Math.max(1, Math.abs(Math.cos(ob.rot))) );
+    if (left > obsLeft) obsLeft = left;
+  }
+  gl.uniform1f(u.uObsLeft, obsLeft);
+  /* 尾流保护只在横流模式 (street) 开启; 竖直流 (rain) 用 x 向保护区会破坏下落 */
+  gl.uniform1f(u.uWakeKeep, mode === 'street' ? 0.03 : 1.0);
+  gl.uniform1f(u.uVOff, Q.vOff); gl.uniform1f(u.uVSpan, Q.vSpan); gl.uniform1f(u.uVMax, Q.vMax);
+  gl.uniform1i(u.uObstacle, obstacleFBO.attach(1));
+  gl.uniform1i(u.uVelocity, velocity.read.attach(0));
+  blit(velocity.write); velocity.swap();
+}
+
 function step(dt) {
   gl.disable(gl.BLEND);
   const tx = velocity.texelSizeX, ty = velocity.texelSizeY;
   const u = (p) => p.uniforms;
 
-  /* 1. 指针搅动 + 演示注入 + 弱来流 */
+  /* 1. 指针搅动 + 演示注入 + 统一风场 */
   for (let i = 0; i < pointerQueue.length; i++) {
     const p = pointerQueue[i];
-    splat(p.x, p.y, p.dx * 5500, p.dy * 5500, p.cr, p.cg, p.cb, 0.006);
+    splat(p.x, p.y, p.dx, p.dy, p.cr, p.cg, p.cb, p.rad);
   }
   pointerQueue.length = 0;
-  injectDemo(dt);
-
-  const windA = (mode === 'vortex' || mode === 'array') ? config.wind * 0.5
-             : (mode === 'turb' ? config.wind * 0.12 : 0);
-  if (windA > 0) {
-    windP.bind();
-    gl.uniform1f(u(windP).uWindX, windA);
-    gl.uniform1f(u(windP).uRelax, 6.0);
-    gl.uniform1f(u(windP).uDt, dt);
-    gl.uniform1f(u(windP).uVOff, Q.vOff);
-    gl.uniform1f(u(windP).uVSpan, Q.vSpan);
-    gl.uniform1f(u(windP).uVMax, Q.vMax);
-    gl.uniform1i(u(windP).uObstacle, obstacleFBO.attach(1));
-    gl.uniform1i(u(windP).uVelocity, velocity.read.attach(0));
-    blit(velocity.write); velocity.swap();
-  }
+  AutoDirector.update(dt, performance.now());
+  updateWind(dt);
+  applyWindPass(dt);
 
   /* 2. curl */
   curlP.bind();
   gl.uniform2f(u(curlP).texelSize, tx, ty);
-  gl.uniform1f(u(curlP).uVOff, Q.vOff);
-  gl.uniform1f(u(curlP).uVSpan, Q.vSpan);
-  gl.uniform1f(u(curlP).uCOff, Q.cOff);
-  gl.uniform1f(u(curlP).uCScale, Q.cScale);
-  gl.uniform1f(u(curlP).uCMax, Q.cMax);
+  gl.uniform1f(u(curlP).uVOff, Q.vOff); gl.uniform1f(u(curlP).uVSpan, Q.vSpan);
+  gl.uniform1f(u(curlP).uCOff, Q.cOff); gl.uniform1f(u(curlP).uCScale, Q.cScale); gl.uniform1f(u(curlP).uCMax, Q.cMax);
   gl.uniform1i(u(curlP).uObstacle, obstacleFBO.attach(1));
   gl.uniform1i(u(curlP).uVelocity, velocity.read.attach(0));
   blit(curl);
@@ -1290,12 +1991,10 @@ function step(dt) {
   if (config.CURL > 0) {
     vortP.bind();
     gl.uniform2f(u(vortP).texelSize, tx, ty);
-    gl.uniform1f(u(vortP).uStrength, config.CURL);
-    gl.uniform1f(u(vortP).uVOff, Q.vOff);
-    gl.uniform1f(u(vortP).uVSpan, Q.vSpan);
-    gl.uniform1f(u(vortP).uVMax, Q.vMax);
-    gl.uniform1f(u(vortP).uCOff, Q.cOff);
-    gl.uniform1f(u(vortP).uCScale, Q.cScale);
+    /* 涡量约束: 与 v3 标定一致 (8bit 不降档 — v3 在此环境 39FPS 清晰涡街) */
+    gl.uniform1f(u(vortP).uStrength, config.CURL * vortMul());
+    gl.uniform1f(u(vortP).uVOff, Q.vOff); gl.uniform1f(u(vortP).uVSpan, Q.vSpan); gl.uniform1f(u(vortP).uVMax, Q.vMax);
+    gl.uniform1f(u(vortP).uCOff, Q.cOff); gl.uniform1f(u(vortP).uCScale, Q.cScale);
     gl.uniform1f(u(vortP).dt, dt);
     gl.uniform1i(u(vortP).uObstacle, obstacleFBO.attach(2));
     gl.uniform1i(u(vortP).uCurl, curl.attach(1));
@@ -1303,13 +2002,11 @@ function step(dt) {
     blit(velocity.write); velocity.swap();
   }
 
-  /* 4. SDF 投影 (pre-advection) */
+  /* 4. SDF 投影 (pre) */
   if (obstacles.length > 0) {
     sdfProjP.bind();
     gl.uniform2f(u(sdfProjP).texelSize, tx, ty);
-    gl.uniform1f(u(sdfProjP).uVOff, Q.vOff);
-    gl.uniform1f(u(sdfProjP).uVSpan, Q.vSpan);
-    gl.uniform1f(u(sdfProjP).uVMax, Q.vMax);
+    gl.uniform1f(u(sdfProjP).uVOff, Q.vOff); gl.uniform1f(u(sdfProjP).uVSpan, Q.vSpan); gl.uniform1f(u(sdfProjP).uVMax, Q.vMax);
     gl.uniform1i(u(sdfProjP).uObstacle, obstacleFBO.attach(1));
     gl.uniform1i(u(sdfProjP).uVelocity, velocity.read.attach(0));
     blit(velocity.write); velocity.swap();
@@ -1322,9 +2019,7 @@ function step(dt) {
   gl.uniform1f(u(advectP).dt, dt);
   gl.uniform1f(u(advectP).dissipation, config.VELOCITY_DISSIPATION);
   gl.uniform1f(u(advectP).uField, 0.0);
-  gl.uniform1f(u(advectP).uVOff, Q.vOff);
-  gl.uniform1f(u(advectP).uVSpan, Q.vSpan);
-  gl.uniform1f(u(advectP).uVMax, Q.vMax);
+  gl.uniform1f(u(advectP).uVOff, Q.vOff); gl.uniform1f(u(advectP).uVSpan, Q.vSpan); gl.uniform1f(u(advectP).uVMax, Q.vMax);
   gl.uniform1f(u(advectP).uDyeClamp, Q.dyeClamp);
   gl.uniform1i(u(advectP).uObstacle, obstacleFBO.attach(2));
   const velId = velocity.read.attach(0);
@@ -1332,19 +2027,16 @@ function step(dt) {
   gl.uniform1i(u(advectP).uSource, velId);
   blit(velocity.write); velocity.swap();
 
-  /* 6. divergence (no-flux 边界) */
+  /* 6. divergence */
   divergeP.bind();
   gl.uniform2f(u(divergeP).texelSize, tx, ty);
-  gl.uniform1f(u(divergeP).uVOff, Q.vOff);
-  gl.uniform1f(u(divergeP).uVSpan, Q.vSpan);
-  gl.uniform1f(u(divergeP).uDOff, Q.dOff);
-  gl.uniform1f(u(divergeP).uDScale, Q.dScale);
-  gl.uniform1f(u(divergeP).uDMax, Q.dMax);
+  gl.uniform1f(u(divergeP).uVOff, Q.vOff); gl.uniform1f(u(divergeP).uVSpan, Q.vSpan);
+  gl.uniform1f(u(divergeP).uDOff, Q.dOff); gl.uniform1f(u(divergeP).uDScale, Q.dScale); gl.uniform1f(u(divergeP).uDMax, Q.dMax);
   gl.uniform1i(u(divergeP).uObstacle, obstacleFBO.attach(1));
   gl.uniform1i(u(divergeP).uVelocity, velocity.read.attach(0));
   blit(divergence);
 
-  /* 7. clear pressure (向 0 衰减, 8bit 下向 offset 衰减) */
+  /* 7. clear pressure */
   clearP.bind();
   gl.uniform1f(u(clearP).uValue, config.PRESSURE);
   gl.uniform1f(u(clearP).uOff, Q.pOff);
@@ -1354,11 +2046,8 @@ function step(dt) {
   /* 8. Jacobi */
   pressureP.bind();
   gl.uniform2f(u(pressureP).texelSize, tx, ty);
-  gl.uniform1f(u(pressureP).uPOff, Q.pOff);
-  gl.uniform1f(u(pressureP).uPScale, Q.pScale);
-  gl.uniform1f(u(pressureP).uPMax, Q.pMax);
-  gl.uniform1f(u(pressureP).uDOff, Q.dOff);
-  gl.uniform1f(u(pressureP).uDScale, Q.dScale);
+  gl.uniform1f(u(pressureP).uPOff, Q.pOff); gl.uniform1f(u(pressureP).uPScale, Q.pScale); gl.uniform1f(u(pressureP).uPMax, Q.pMax);
+  gl.uniform1f(u(pressureP).uDOff, Q.dOff); gl.uniform1f(u(pressureP).uDScale, Q.dScale);
   gl.uniform1i(u(pressureP).uDivergence, divergence.attach(1));
   gl.uniform1i(u(pressureP).uObstacle, obstacleFBO.attach(2));
   for (let i = 0; i < config.PRESSURE_ITERATIONS; i++) {
@@ -1369,23 +2058,18 @@ function step(dt) {
   /* 9. gradient subtract */
   gradientP.bind();
   gl.uniform2f(u(gradientP).texelSize, tx, ty);
-  gl.uniform1f(u(gradientP).uPOff, Q.pOff);
-  gl.uniform1f(u(gradientP).uPScale, Q.pScale);
-  gl.uniform1f(u(gradientP).uVOff, Q.vOff);
-  gl.uniform1f(u(gradientP).uVSpan, Q.vSpan);
-  gl.uniform1f(u(gradientP).uVMax, Q.vMax);
+  gl.uniform1f(u(gradientP).uPOff, Q.pOff); gl.uniform1f(u(gradientP).uPScale, Q.pScale);
+  gl.uniform1f(u(gradientP).uVOff, Q.vOff); gl.uniform1f(u(gradientP).uVSpan, Q.vSpan); gl.uniform1f(u(gradientP).uVMax, Q.vMax);
   gl.uniform1i(u(gradientP).uObstacle, obstacleFBO.attach(2));
   gl.uniform1i(u(gradientP).uPressure, pressure.read.attach(0));
   gl.uniform1i(u(gradientP).uVelocity, velocity.read.attach(1));
   blit(velocity.write); velocity.swap();
 
-  /* 10. SDF 投影 (post-gradient) */
+  /* 10. SDF 投影 (post) */
   if (obstacles.length > 0) {
     sdfProjP.bind();
     gl.uniform2f(u(sdfProjP).texelSize, tx, ty);
-    gl.uniform1f(u(sdfProjP).uVOff, Q.vOff);
-    gl.uniform1f(u(sdfProjP).uVSpan, Q.vSpan);
-    gl.uniform1f(u(sdfProjP).uVMax, Q.vMax);
+    gl.uniform1f(u(sdfProjP).uVOff, Q.vOff); gl.uniform1f(u(sdfProjP).uVSpan, Q.vSpan); gl.uniform1f(u(sdfProjP).uVMax, Q.vMax);
     gl.uniform1i(u(sdfProjP).uObstacle, obstacleFBO.attach(1));
     gl.uniform1i(u(sdfProjP).uVelocity, velocity.read.attach(0));
     blit(velocity.write); velocity.swap();
@@ -1398,9 +2082,7 @@ function step(dt) {
   gl.uniform1f(u(advectP).dt, dt);
   gl.uniform1f(u(advectP).dissipation, config.DENSITY_DISSIPATION);
   gl.uniform1f(u(advectP).uField, 1.0);
-  gl.uniform1f(u(advectP).uVOff, Q.vOff);
-  gl.uniform1f(u(advectP).uVSpan, Q.vSpan);
-  gl.uniform1f(u(advectP).uVMax, Q.vMax);
+  gl.uniform1f(u(advectP).uVOff, Q.vOff); gl.uniform1f(u(advectP).uVSpan, Q.vSpan); gl.uniform1f(u(advectP).uVMax, Q.vMax);
   gl.uniform1f(u(advectP).uDyeClamp, Q.dyeClamp);
   gl.uniform1i(u(advectP).uObstacle, obstacleFBO.attach(2));
   gl.uniform1i(u(advectP).uVelocity, velocity.read.attach(0));
@@ -1408,7 +2090,12 @@ function step(dt) {
   blit(dye.write); dye.swap();
 }
 
-/* ---------------- render ---------------- */
+/* ======================================================================
+   显示 (4 模式 + bloom + 皮肤 palette)
+====================================================================== */
+let streakDensity = 1.0;   // 性能降级: 1.0 → 1.4 → 1.9
+let smokeOn = true;
+
 function applyBloom2Level() {
   const src = dye.read;
   gl.disable(gl.BLEND);
@@ -1419,7 +2106,6 @@ function applyBloom2Level() {
   gl.uniform1f(p.uThreshold, config.BLOOM_THRESHOLD);
   gl.uniform1i(p.uTexture, src.attach(0));
   blit(bloomA);
-  /* 2 级 separable gaussian (sigma≈1 + sigma≈2, 3-tap) */
   blurP.bind();
   const b = blurP.uniforms;
   gl.uniform1i(b.uTexture, bloomA.attach(0));
@@ -1436,50 +2122,309 @@ function applyBloom2Level() {
   blit(bloomA);
 }
 
-function render() {
-  if (config.BLOOM) applyBloom2Level();
-  ensureDisplayProgram();
-  const u = displayP.uniforms;
-  const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
-  gl.uniform2f(u.uDyeTexel, dye.texelSizeX, dye.texelSizeY);
-  gl.uniform2f(u.uDitherScale, w / dithering.width, h / dithering.height);
-  gl.uniform1f(u.uExposure, 1.15);
-  gl.uniform1f(u.uSaturation, 1.25);
-  gl.uniform1f(u.uVignette, 0.36);
-  gl.uniform1f(u.uBloomStr, config.BLOOM_INTENSITY);
-  gl.uniform1f(u.uGlowStr, config.glow);
-  gl.uniform1f(u.uGlowRange, 0.35);
-  gl.uniform1f(u.uGlowCoreGain, 6.0);
-  gl.uniform1f(u.uGlowSign, 1.0);
-  gl.uniform1f(u.uCurlScale, floatFields ? 1.0 : 1.0 / Q.cScale);
+function setViewCommon(prog, dw, dh) {
+  const u = prog.uniforms;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  gl.uniform2f(u.uResolution, dw, dh);
+  gl.uniform2f(u.uVelToPx, dw / velocity.width, dh / velocity.height);
+  gl.uniform1f(u.uVelOff, Q.vOff);
+  gl.uniform1f(u.uVelSpan, Q.vSpan);
   gl.uniform1f(u.uCurlOff, Q.cOff);
-  gl.uniform1f(u.uVelScale, floatFields ? 1.0 : Q.vSpan);
-  gl.uniform2f(u.uVelOff, Q.vOff, Q.vOff);
-  gl.uniform3f(u.uObstacleColor, 0.24, 0.28, 0.36);
-  gl.uniform1i(u.uDye, dye.read.attach(0));
-  gl.uniform1i(u.uVelocity, velocity.read.attach(1));
+  gl.uniform1f(u.uCurlScale, Q.cScale);
+  gl.uniform1f(u.uVelVisScale, isMobile ? 10.0 : 12.0);
+  const sp = skinPalette;
+  gl.uniform3f(u.uObstacleA, sp.obsA[0], sp.obsA[1], sp.obsA[2]);
+  gl.uniform3f(u.uObstacleB, sp.obsB[0], sp.obsB[1], sp.obsB[2]);
+  gl.uniform3f(u.uObstacleEdge, sp.obsEdge[0], sp.obsEdge[1], sp.obsEdge[2]);
+  gl.uniform1f(u.uBloomStr, config.BLOOM_INTENSITY * 0.5);
+  gl.uniform1i(u.uVelocity, velocity.read.attach(0));
+  gl.uniform1i(u.uObstacle, obstacleFBO.attach(1));
   gl.uniform1i(u.uCurl, curl.attach(2));
-  gl.uniform1i(u.uObstacle, obstacleFBO.attach(3));
+  gl.uniform1i(u.uDye, dye.read.attach(3));
   gl.uniform1i(u.uBloom, bloomA.attach(4));
-  gl.uniform1i(u.uDithering, dithering.attach(5));
+}
+
+function particleUpdateStep(dt, nowSec) {
+  /* update: particleA → particleB */
+  particleUpdateP.bind();
+  const u = particleUpdateP.uniforms;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = particleB.width, h = particleB.height; /* 目标 FBO 尺寸, 不是画布 */
+  gl.uniform2f(u.uVelToPx, w / velocity.width, h / velocity.height);
+  gl.uniform1f(u.uVelOff, Q.vOff); gl.uniform1f(u.uVelSpan, Q.vSpan);
+  gl.uniform1f(u.uCurlOff, Q.cOff); gl.uniform1f(u.uCurlScale, Q.cScale);
+  gl.uniform2f(u.uSimSize, velocity.width, velocity.height);
+  gl.uniform1f(u.uDt, dt);
+  gl.uniform1f(u.uDecay, Math.exp(-dt / 0.22));
+  gl.uniform1f(u.uSpawnRate, isMobile ? 0.022 : 0.028);
+  gl.uniform1f(u.uSpawnFreq, 24.0);
+  gl.uniform1f(u.uPointRadius, 0.36);
+  gl.uniform2f(u.uSpawnGrid, particleGridX, particleGridY);
+  gl.uniform1f(u.uInjectGain, 0.65);
+  const sp = skinPalette;
+  gl.uniform3f(u.uParticleColor, sp.pColor[0], sp.pColor[1], sp.pColor[2]);
+  gl.uniform1f(u.uTime, nowSec);
+  gl.uniform1i(u.uVelocity, velocity.read.attach(0));
+  gl.uniform1i(u.uObstacle, obstacleFBO.attach(1));
+  gl.uniform1i(u.uPrev, particleA.attach(2));
+  blit(particleB);
+  const t = particleA; particleA = particleB; particleB = t;
+}
+
+function render(nowSec) {
+  if (config.BLOOM) applyBloom2Level();
+  const dw = displayFBO.width, dh = displayFBO.height;
+  const dt = 1 / 60;
+  /* view pass 画到 displayFBO (软渲染 0.65×), 结尾统一放大到画布 */
+
+  if (state.view === 'particle') {
+    particleUpdateStep(1/60, nowSec);
+    const prog = particleRenderP;
+    prog.bind();
+    setViewCommon(prog, dw, dh);
+    const u = prog.uniforms;
+    const sp = skinPalette;
+    gl.uniform3f(u.uParticleBg, sp.pBg[0], sp.pBg[1], sp.pBg[2]);
+    gl.uniform1f(u.uParticleGain, 1.7);
+    gl.uniform1f(u.uSubtract, currentSkin().inkInvert ? 1.0 : 0.0);
+    gl.uniform1i(u.uParticles, particleA.attach(5));
+    blit(displayFBO);
+  } else if (state.view === 'scalar') {
+    const prog = viewScalarP;
+    prog.bind();
+    setViewCommon(prog, dw, dh);
+    const u = prog.uniforms;
+    const fieldIdx = state.scalarField === 'speed' ? 0 : (state.scalarField === 'pressure' ? 1 : 2);
+    gl.uniform1i(u.uScalarField, fieldIdx);
+    gl.uniform1i(u.uColormap, state.colormap === 'turbo' ? 1 : 0);
+    if (state.scalarField === 'speed') {
+      gl.uniform1f(u.uScalarMin, 0.0);
+      gl.uniform1f(u.uScalarMax, isMobile ? 10.0 : 12.0);
+    } else if (state.scalarField === 'curl') {
+      gl.uniform1f(u.uScalarMin, -25.0); gl.uniform1f(u.uScalarMax, 25.0);
+    } else {
+      gl.uniform1f(u.uScalarMin, -5.0); gl.uniform1f(u.uScalarMax, 5.0);
+    }
+    gl.uniform1f(u.uPressureOff, Q.pOff);
+    gl.uniform1f(u.uPressureScale, Q.pScale);
+    gl.uniform1i(u.uPressure, pressure.read.attach(5));
+    blit(displayFBO);
+  } else if (state.view === 'wake') {
+    const prog = viewWakeP;
+    prog.bind();
+    setViewCommon(prog, dw, dh);
+    const u = prog.uniforms;
+    const sp = skinPalette;
+    gl.uniform3f(u.uWakeBg, sp.wakeBg[0], sp.wakeBg[1], sp.wakeBg[2]);
+    gl.uniform3f(u.uWakeLow, sp.wakeLow[0], sp.wakeLow[1], sp.wakeLow[2]);
+    gl.uniform3f(u.uWakeMid, sp.wakeMid[0], sp.wakeMid[1], sp.wakeMid[2]);
+    gl.uniform3f(u.uWakeHigh, sp.wakeHigh[0], sp.wakeHigh[1], sp.wakeHigh[2]);
+    gl.uniform1f(u.uDyeGain, 1.6);
+    gl.uniform1f(u.uCurlGain, 0.8);
+    /* xhigh 第5轮: 涡核检测范围 (8bit 低阈值, float 稍高) */
+    gl.uniform2f(u.uCoreRange, floatFields ? 1.2 : 0.8, floatFields ? 4.0 : 3.2);
+    gl.uniform2f(u.uCurlFade, floatFields ? 18.0 : 14.0, floatFields ? 30.0 : 22.0);
+    blit(displayFBO);
+  } else {
+    /* 风洞 (默认) */
+    const prog = viewWindP;
+    prog.bind();
+    setViewCommon(prog, dw, dh);
+    const u = prog.uniforms;
+    const sp = skinPalette;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    gl.uniform3f(u.uWindLow, sp.windLow[0], sp.windLow[1], sp.windLow[2]);
+    gl.uniform3f(u.uWindMid, sp.windMid[0], sp.windMid[1], sp.windMid[2]);
+    gl.uniform3f(u.uWindHigh, sp.windHigh[0], sp.windHigh[1], sp.windHigh[2]);
+    gl.uniform3f(u.uStreakLow, sp.streakLow[0], sp.streakLow[1], sp.streakLow[2]);
+    gl.uniform3f(u.uStreakHigh, sp.streakHigh[0], sp.streakHigh[1], sp.streakHigh[2]);
+    gl.uniform3f(u.uSmoke0, sp.smoke0[0], sp.smoke0[1], sp.smoke0[2]);
+    gl.uniform3f(u.uSmoke1, sp.smoke1[0], sp.smoke1[1], sp.smoke1[2]);
+    gl.uniform1f(u.uStreakSpacing, (isMobile ? 32 : 24) * dpr * streakDensity);
+    gl.uniform1f(u.uStreakWidth, 1.5 * dpr);
+    gl.uniform1f(u.uStreakAlpha, 0.58);
+    gl.uniform1f(u.uStreakMinPx, 3.5 * dpr);
+    gl.uniform1f(u.uStreakMaxPx, (isMobile ? 12 : 16) * dpr);
+    gl.uniform1f(u.uWindXBias, 0.18);
+    gl.uniform1f(u.uCurlLow, 2.0);
+    gl.uniform1f(u.uCurlHigh, 10.0);
+    gl.uniform1f(u.uSmokeAlpha, smokeOn ? 0.72 : 0.0);
+    gl.uniform1f(u.uDyeGain, 0.55);
+    gl.uniform1f(u.uVignette, 0.30);
+    blit(displayFBO);
+  }
+
+  /* 放大到画布 (LINEAR 采样, 1 次廉价 copy pass) */
+  copyP.bind();
+  gl.uniform1i(copyP.uniforms.uTexture, displayFBO.attach(0));
   blit(null);
 }
 
-/* ---------------- 障碍物预设 ---------------- */
+/* ======================================================================
+   模式切换
+====================================================================== */
 function setMode(m) {
   mode = m;
-  document.querySelectorAll('#modeBtns .btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
-  obstacles = LAYOUTS[m]();
+  document.querySelectorAll('#modeBtns .mbtn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  obstacles = MODES[m].obstacles.map(o => ({ shape:o.shape, x:o.x, y:o.y, r:o.r, rot:o.rot }));
   maskDirty = true;
+  config.CURL = MODES[m].curl;
+  config.DENSITY_DISSIPATION = MODES[m].diss;
+  document.getElementById('ctlVort').value = 1.0;
+  document.getElementById('valVort').textContent = '1.00';
+  syncSliderFill(document.getElementById('ctlVort'));
+  setWindTarget(true);
   clearFields();
-  renderObList();
+  AutoDirector.setMode(m, performance.now());
+  AutoDirector.prime(MODES[m].prime);
+  hudModeName.textContent = MODE_NAME[m] || m;
   toast(MODE_INFO[m]);
 }
-document.querySelectorAll('#modeBtns .btn').forEach(btn => {
+const MODE_NAME = { street:'涡街', fireworks:'烟花', rain:'细雨', vortex:'漩涡', jet:'对撞', free:'自由' };
+document.querySelectorAll('#modeBtns .mbtn').forEach(btn => {
   btn.addEventListener('click', () => setMode(btn.dataset.mode));
 });
 
-/* ---------------- 指针交互 ---------------- */
+/* ======================================================================
+   HUD (2Hz 刷新)
+====================================================================== */
+const hudFps = document.getElementById('hudFps');
+const hudGrid = document.getElementById('hudGrid');
+const hudWind = document.getElementById('hudWind');
+const hudModeName = document.getElementById('hudMode');
+const hudSkinEl = document.getElementById('hudSkin');
+const hudDye = document.getElementById('hudDye');
+let hudFrames = 0, hudLastT = performance.now();
+
+function updateHudStatic() {
+  if (!velocity) return;
+  hudGrid.textContent = velocity.width + '×' + velocity.height;
+  hudDye.textContent = dye ? dye.width : '--';
+}
+function updateHudDynamic(now) {
+  hudFrames++;
+  const interval = now - hudLastT;
+  if (interval >= 500) {
+    const fps = Math.round(hudFrames * 1000 / interval);
+    hudFrames = 0; hudLastT = now;
+    hudFps.textContent = String(fps);
+    const c = windState.cur;
+    /* HUD 风速 = 滑杆设定值 (对齐参考图 "风速 2.20" 的可读性) */
+    hudWind.textContent = (parseFloat(document.getElementById('ctlWind').value) || 2.0).toFixed(2);
+    return fps;
+  }
+  return null;
+}
+
+/* colorbar (标量模式) */
+const colorbar = document.getElementById('colorbar');
+const colorbarBar = document.getElementById('colorbarBar');
+const COLORBAR_GRADIENTS = {
+  viridis: 'linear-gradient(to top, #440154 0%, #3b528b 25%, #21918c 50%, #5ec962 75%, #fde725 100%)',
+  turbo: 'linear-gradient(to top, #30123b 0%, #4669b0 25%, #35b779 50%, #f5d442 75%, #8c2d04 100%)'
+};
+function updateColorbar() {
+  if (state.view !== 'scalar') { colorbar.hidden = true; return; }
+  colorbar.hidden = false;
+  const mobile = window.matchMedia('(max-width: 720px)').matches;
+  const dir = mobile ? 'to right' : 'to top';
+  colorbarBar.style.background = (COLORBAR_GRADIENTS[state.colormap] || COLORBAR_GRADIENTS.viridis).replace('to top', dir);
+  let m = -16, M = 16;
+  if (state.scalarField === 'speed') { m = 0; M = isMobile ? 10 : 12; }
+  else if (state.scalarField === 'curl') { m = -25; M = 25; }
+  document.getElementById('colorbarMin').textContent = m.toFixed(1);
+  document.getElementById('colorbarMax').textContent = M.toFixed(1);
+}
+
+/* ======================================================================
+   UI 绑定: 显示模式 chips / 皮肤按钮 / 参数
+====================================================================== */
+function syncSliderFill(el) {
+  const min = parseFloat(el.min || '0'), max = parseFloat(el.max || '100'), v = parseFloat(el.value || '0');
+  el.style.setProperty('--fill', ((v - min) / (max - min) * 100) + '%');
+}
+
+function setView(v) {
+  state.view = v;
+  document.querySelectorAll('#viewChips .chip').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  hudModeName.textContent = { wind:'风洞', wake:'尾流', scalar:'色图', particle:'粒子' }[v];
+  const isScalar = (v === 'scalar');
+  document.getElementById('ctlScalarWrap').hidden = !isScalar;
+  document.getElementById('ctlCmapWrap').hidden = !isScalar;
+  updateColorbar();
+}
+document.querySelectorAll('#viewChips .chip').forEach(btn => {
+  btn.addEventListener('click', () => setView(btn.dataset.view));
+});
+
+function setSkin(id) {
+  state.skin = id;
+  document.querySelectorAll('.skin-btn').forEach(b => b.classList.toggle('active', b.dataset.skin === id));
+  applySkinPalette();
+  hudSkinEl.textContent = currentSkin().name;
+}
+function buildSkinButtons() {
+  const box = document.getElementById('skinBtns');
+  box.innerHTML = '';
+  Object.keys(SKINS).forEach(id => {
+    const s = SKINS[id];
+    const b = document.createElement('button');
+    b.className = 'skin-btn' + (id === state.skin ? ' active' : '');
+    b.dataset.skin = id;
+    b.title = s.name;
+    const iEl = document.createElement('i');
+    iEl.style.background = s.preview;
+    b.appendChild(iEl);
+    const tip = document.createElement('span');
+    tip.className = 'tip';
+    tip.textContent = s.name;
+    b.appendChild(tip);
+    b.addEventListener('click', () => setSkin(id));
+    box.appendChild(b);
+  });
+}
+buildSkinButtons();
+
+/* 参数滑杆 */
+function bindRange(id, valId, fn, fmt) {
+  const el = document.getElementById(id), v = document.getElementById(valId);
+  const upd = () => { const x = parseFloat(el.value); if (v) v.textContent = fmt ? fmt(x) : x; syncSliderFill(el); fn(x); };
+  el.addEventListener('input', upd);
+  upd();
+}
+bindRange('ctlWind', 'valWind', () => {}, x => x.toFixed(2));
+bindRange('ctlVort', 'valVort', () => {}, x => x.toFixed(2));
+
+document.getElementById('ctlScalar').addEventListener('change', e => { state.scalarField = e.target.value; updateColorbar(); });
+document.getElementById('ctlCmap').addEventListener('change', e => { state.colormap = e.target.value; updateColorbar(); });
+
+/* 暂停 / 重置 */
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn.addEventListener('click', () => {
+  config.PAUSED = !config.PAUSED;
+  pauseBtn.textContent = config.PAUSED ? '▶' : '⏸';
+  pauseBtn.classList.toggle('active', config.PAUSED);
+});
+document.getElementById('resetBtn').addEventListener('click', () => { clearFields(); toast('已清除染料与速度场'); });
+document.getElementById('defaultBtn').addEventListener('click', () => {
+  setSkin('engineering'); setView('wind'); setMode('street');
+  document.getElementById('ctlWind').value = 2.0;
+  document.getElementById('valWind').textContent = '2.00';
+  syncSliderFill(document.getElementById('ctlWind'));
+  toast('已恢复默认：风洞 · 工程风 · 涡街');
+});
+document.getElementById('shareBtn').addEventListener('click', () => {
+  const s = { m: mode, v: state.view, k: state.skin };
+  try {
+    const url = location.origin + location.pathname + '?' + JSON.stringify(s);
+    if (navigator.clipboard) { navigator.clipboard.writeText(url).then(() => toast('分享链接已复制到剪贴板'), () => toast(url)); }
+    else toast(url);
+  } catch (e) { toast('复制失败'); }
+});
+
+/* ======================================================================
+   指针交互: 拖动搅动 / 长按增删障碍 / 双击增删 / 滚轮缩放 / 点击爆发
+====================================================================== */
 function toUV(e) {
   const r = canvas.getBoundingClientRect();
   return { x: (e.clientX - r.left) / r.width, y: 1 - (e.clientY - r.top) / r.height };
@@ -1487,13 +2432,29 @@ function toUV(e) {
 let drag = null;
 let lpTimer = null, lpPt = null, lpMoved = false;
 let lastUserT = performance.now(), lastAutoT = 0;
+
+function pointerSplat(x, y, dx, dy, speed) {
+  /* speed: uv/s → 表值力 (clamp 3.5) → 格/秒 */
+  const forcePeak = clamp(speed * 14, 0, 3.5);
+  if (forcePeak < 0.01 && dx === 0 && dy === 0) return;
+  const dist = Math.hypot(dx, dy);
+  const dirX = dist > 0 ? dx / dist : 0, dirY = dist > 0 ? dy / dist : 1;
+  const f = 7.0 * simScale();
+  const fx = (dx !== 0 || dy !== 0) ? dirX * forcePeak * f : 0;
+  const fy = (dx !== 0 || dy !== 0) ? dirY * forcePeak * f : 0;
+  const seed = 0.1 + Math.random() * 0.8;
+  const dyeAmt = 0.5 + clamp(speed * 0.05, 0, 0.5);
+  const rad = 0.008 * (1 + clamp(speed * 0.04, 0, 0.6));
+  pointerQueue.push({ x, y, dx: fx, dy: fy, cr: dyeAmt, cg: 0, cb: seed, rad });
+}
+
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   lastUserT = performance.now();
   const uv = toUV(e);
   const idx = hitObstacle(uv.x, uv.y);
   if (idx >= 0) { drag = { type:'ob', i: idx }; canvas.classList.add('grabbing'); }
-  else drag = { type:'stir', last: uv };
+  else drag = { type:'stir', last: uv, lastT: performance.now() };
   try { canvas.setPointerCapture(e.pointerId); } catch(err){}
   lpPt = { x: e.clientX, y: e.clientY }; lpMoved = false;
   clearTimeout(lpTimer);
@@ -1525,19 +2486,29 @@ canvas.addEventListener('pointermove', (e) => {
     else { ob.x = clamp(uv.x, 0.02, 0.98); ob.y = clamp(uv.y, 0.02, 0.98); }
     maskDirty = true;
   } else {
+    const now = performance.now();
+    const dt = Math.max(1/240, (now - drag.lastT) / 1000);
     const dx = uv.x - drag.last.x, dy = uv.y - drag.last.y;
-    drag.last = uv;
-    hueBase = (hueBase + 0.002 + Math.abs(dx) * 0.5) % 1;
-    const c = hsv(hueBase, 0.85, 1.0);
-    pointerQueue.push({ x:uv.x, y:uv.y, dx, dy, cr:c[0]*0.5, cg:c[1]*0.5, cb:c[2]*0.5 });
+    drag.last = uv; drag.lastT = now;
+    pointerSplat(uv.x, uv.y, dx, dy, Math.hypot(dx, dy) / dt);
   }
 });
 window.addEventListener('pointerup', () => { drag = null; canvas.classList.remove('grabbing'); clearTimeout(lpTimer); lpPt = null; });
 canvas.addEventListener('dblclick', (e) => {
   const uv = toUV(e);
   const idx = hitObstacle(uv.x, uv.y);
-  if (idx >= 0) removeObstacle(idx);
-  else addObstacle('circle', uv.x, uv.y, nextSize);
+  if (idx >= 0) { removeObstacle(idx); toast('已删除障碍物'); }
+  else {
+    /* 点击爆发: 8 向喷射 + 中心注染 */
+    const f = 7.0 * simScale() * 0.85;
+    const seed = 0.1 + Math.random() * 0.8;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      splat(uv.x + Math.cos(a) * 0.010, uv.y + Math.sin(a) * 0.010, Math.cos(a) * f, Math.sin(a) * f, 0.65, 0, seed, 0.012);
+    }
+    splat(uv.x, uv.y, 0, 0, 0.85, 0, seed, 0.006);
+    toast('💥 点击爆发！双击空白处也可添加障碍物');
+  }
 });
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
@@ -1556,60 +2527,6 @@ canvas.addEventListener('wheel', (e) => {
   }
 }, { passive:false });
 
-/* ---------------- UI 绑定 (JS 先设值再绑定, 防止 value 属性覆盖) ---------------- */
-function bindRange(id, valId, fn, fmt) {
-  const el = document.getElementById(id), v = document.getElementById(valId);
-  const upd = () => { const x = parseFloat(el.value); v.textContent = fmt ? fmt(x) : x; fn(x); };
-  el.addEventListener('input', upd);
-  upd();
-}
-document.getElementById('sWind').value = config.wind;
-document.getElementById('sVort').value = config.CURL;
-document.getElementById('sVisc').value = config.VELOCITY_DISSIPATION;
-document.getElementById('sDye').value = config.DENSITY_DISSIPATION;
-document.getElementById('sIter').value = config.PRESSURE_ITERATIONS;
-document.getElementById('sRes').value = config.SIM_RESOLUTION;
-document.getElementById('sBloom').value = config.BLOOM_INTENSITY;
-document.getElementById('sGlow').value = config.glow;
-bindRange('sWind', 'vWind',  x => config.wind = x);
-bindRange('sVort', 'vVort',  x => config.CURL = x);
-bindRange('sVisc', 'vVisc',  x => config.VELOCITY_DISSIPATION = x, x => x.toFixed(2));
-bindRange('sDye',  'vDye',   x => config.DENSITY_DISSIPATION = x, x => x.toFixed(1));
-bindRange('sIter', 'vIter',  x => config.PRESSURE_ITERATIONS = Math.round(x));
-bindRange('sRes',  'vRes',   x => { const r = Math.round(x); if (r !== config.SIM_RESOLUTION) { config.SIM_RESOLUTION = r; initFramebuffers(); } });
-bindRange('sBloom','vBloom', x => config.BLOOM_INTENSITY = x, x => x.toFixed(2));
-bindRange('sGlow', 'vGlow',  x => config.glow = x, x => x.toFixed(2));
-bindRange('sSize', 'vSize',  x => nextSize = x, x => x.toFixed(3));
-document.getElementById('selMode').addEventListener('change', e => config.displayMode = parseFloat(e.target.value));
-
-const pauseBtn = document.getElementById('pauseBtn');
-pauseBtn.addEventListener('click', () => {
-  config.PAUSED = !config.PAUSED;
-  pauseBtn.textContent = config.PAUSED ? '▶ 继续' : '⏸ 暂停';
-  pauseBtn.classList.toggle('active', config.PAUSED);
-});
-document.getElementById('clearBtn').addEventListener('click', () => { clearFields(); toast('已清除染料与速度场'); });
-document.getElementById('panelBtn').addEventListener('click', () => document.getElementById('panel').classList.toggle('closed'));
-if (window.innerWidth < 680) document.getElementById('panel').classList.add('closed');
-
-document.getElementById('addCircle').addEventListener('click', () => addObstacle('circle', 0.3 + Math.random()*0.4, 0.3 + Math.random()*0.4, nextSize));
-document.getElementById('addBox').addEventListener('click', () => addObstacle('box', 0.3 + Math.random()*0.4, 0.3 + Math.random()*0.4, nextSize*1.2, Math.random()*Math.PI));
-document.getElementById('clearObs').addEventListener('click', () => { obstacles = []; maskDirty = true; renderObList(); });
-document.getElementById('randObs').addEventListener('click', () => {
-  obstacles = [];
-  const n = 3 + Math.floor(Math.random()*3);
-  for (let i = 0; i < n; i++) {
-    const shape = Math.random() < 0.6 ? 'circle' : 'box';
-    addObstacle(shape, 0.2 + Math.random()*0.6, 0.2 + Math.random()*0.6, 0.03 + Math.random()*0.06, Math.random()*Math.PI);
-  }
-});
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) {
-    e.preventDefault();
-    pauseBtn.click();
-  }
-});
-
 let toastTimer = null;
 function toast(msg) {
   const el = document.getElementById('toast');
@@ -1619,40 +2536,15 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
-/* ---------------- 主循环 + 自适应降质 ---------------- */
+/* ======================================================================
+   主循环 + 自适应降质
+====================================================================== */
 let last = performance.now();
+const startTime = last;
 let fps = 60, frames = 0, lastFpsT = performance.now();
 let qChecks = 0, lastDowngradeT = 0;
-function updateStats(now) {
-  frames++;
-  if (now - lastFpsT >= 500) {
-    fps = Math.round(frames * 1000 / (now - lastFpsT));
-    frames = 0; lastFpsT = now;
-    qChecks++;
-    if (qChecks >= 4) {
-      qChecks = 0;
-      if (fps < 42 && now - lastDowngradeT > 5000) {
-        lastDowngradeT = now;
-        if (dyeRes > 256) {
-          dyeRes = Math.max(256, dyeRes >> 1);
-          initFramebuffers();
-          toast('性能保护：染料分辨率已自动降低');
-        } else if (config.SIM_RESOLUTION > 96) {
-          const r = Math.max(96, Math.round(config.SIM_RESOLUTION * 0.75 / 8) * 8);
-          config.SIM_RESOLUTION = r;
-          document.getElementById('sRes').value = r;
-          document.getElementById('vRes').textContent = r;
-          initFramebuffers();
-        }
-      }
-    }
-    const windStr = (mode === 'vortex' || mode === 'array') ? ' · 来流 ' + config.wind : (mode === 'jet' ? ' · 射流 ' + config.wind : '');
-    document.getElementById('stats').textContent =
-      fps + ' FPS · 网格 ' + velocity.width + '×' + velocity.height + ' · 染料 ' + dye.width + '×' + dye.height +
-      ' · 障碍物 ' + obstacles.length + windStr + (config.PAUSED ? ' · ⏸ 已暂停' : '') +
-      (floatFields ? '' : ' · 8bit回退');
-  }
-}
+let lastFpsValue = null;
+
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - last) / 1000;
@@ -1667,25 +2559,82 @@ function frame(now) {
   }
   if (maskDirty) { paintObstacleMask(); maskDirty = false; }
   if (!config.PAUSED) {
-    if (now - lastUserT > 4500 && now - lastAutoT > 1500) {
-      lastAutoT = now;
-      const ax = 0.2 + 0.6 * Math.random(), ay = 0.2 + 0.6 * Math.random();
-      const aa = Math.random() * Math.PI * 2;
-      const af = 50 + Math.random() * 130;
-      const ac = hsv(hueBase, 0.85, 1.0);
-      pointerQueue.push({ x:ax, y:ay, dx:Math.cos(aa)*af/5500, dy:Math.sin(aa)*af/5500, cr:ac[0]*0.5, cg:ac[1]*0.5, cb:ac[2]*0.5 });
-    }
+    /* 空闲 4.5s 后自动搅动 (free 模式才有演示注入, 其他模式靠 AutoDirector) */
+    if (mode === 'free' && now - lastUserT > 4500) lastUserT = now;
     step(dt);
   }
-  render();
-  updateStats(now);
+  render(now * 0.001);
+  const fpsNow = updateHudDynamic(now);
+  if (fpsNow != null) {
+    fps = fpsNow;
+    qChecks++;
+    if (qChecks >= 4) {
+      qChecks = 0;
+      const warmup = now - startTime < 15000;   // 启动 15s 内不降质 (shader 编译/预热期)
+      /* 降质阶梯: 染料分辨率 → 速度网格 → 显示模式降级 (每 6s 最多一级; 阈值 30 = 软渲染合格线) */
+      if (!warmup && fps < 30 && now - lastDowngradeT > 6000) {
+        lastDowngradeT = now;
+        if (dyeResScale > 0.5) {
+          dyeResScale -= 0.25;
+          initFramebuffers();
+          toast('性能保护：已降低渲染分辨率');
+        } else if (config.SIM_RESOLUTION > 96) {
+          config.SIM_RESOLUTION = Math.max(96, Math.round(config.SIM_RESOLUTION * 0.75 / 8) * 8);
+          initFramebuffers();
+          toast('性能保护：已降低物理网格分辨率');
+        } else if (state.view === 'particle') {
+          setView('wake');
+          toast('性能保护：已切到尾流模式');
+        } else if (state.view === 'wind' && smokeOn) {
+          smokeOn = false;
+          toast('性能保护：已关闭尾流烟雾层');
+        } else if (streakDensity < 2.5) {
+          streakDensity += 0.5;
+        }
+      }
+      /* 自动恢复: 稳定 50+ FPS 持续 20s → 逐级升档回默认 */
+      else if (fps > 50 && now - lastDowngradeT > 20000) {
+        if (!smokeOn) {
+          smokeOn = true;
+          toast('性能已恢复：尾流烟雾层已开启');
+        } else if (config.SIM_RESOLUTION < SIM_RES_DEFAULT) {
+          config.SIM_RESOLUTION = Math.min(SIM_RES_DEFAULT, config.SIM_RESOLUTION + 16);
+          initFramebuffers();
+          toast('性能已恢复：物理网格已提升');
+        } else if (dyeResScale < 1.0) {
+          dyeResScale = Math.min(1.0, dyeResScale + 0.25);
+          initFramebuffers();
+          toast('性能已恢复：渲染分辨率已提升');
+        }
+      }
+    }
+  }
 }
 
-/* ---------------- 启动 ---------------- */
+/* ======================================================================
+   启动
+====================================================================== */
+function readShareParams() {
+  try {
+    const qs = new URLSearchParams(location.search);
+    if (qs.has('s')) {
+      const s = JSON.parse(qs.get('s'));
+      if (s.m && MODES[s.m]) mode = s.m;
+      if (s.v && { wind:1, wake:1, scalar:1, particle:1 }[s.v]) state.view = s.v;
+      if (s.k && SKINS[s.k]) state.skin = s.k;
+    }
+  } catch (e) {}
+}
+
+readShareParams();
 initFramebuffers();
-setMode('vortex');
-splashBurst(10);
+applySkinPalette();
+setView(state.view);
+buildSkinButtons();
+setMode(mode);
+updateColorbar();
 requestAnimationFrame(frame);
+
 </script>
 </body>
 </html>
