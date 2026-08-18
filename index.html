@@ -433,8 +433,8 @@ const Q = {
 
 /* ---------------- config / state ---------------- */
 const isMobile = matchMedia('(max-width: 700px), (pointer: coarse)').matches;
-/* 8bit 路径 (无半浮点支持, 常见于软件渲染/弱 GPU): 默认网格 128 (v4 显示 pass 比 v3 重, 128 稳定 45+ FPS) */
-const SIM_RES_DEFAULT = (isMobile || !floatFields) ? 128 : 192;
+/* 8bit 路径 (无半浮点支持): 默认网格 192 = v3 标定 (128/160 时涡核 6-8 格, 低于量化噪声淹没阈值) */
+const SIM_RES_DEFAULT = (isMobile || !floatFields) ? 192 : 192;
 let dyeRes = isMobile ? 512 : 1024;
 let dyeResScale = 1.0;   // 自适应降质: 1.0 → 0.75 → 0.5
 const config = {
@@ -948,8 +948,13 @@ float sdSegment(vec2 p, float halfLen, vec2 dir) {
   return length(p - dir * t);
 }
 void main() {
-  /* 1. 速度底图: |vel| 为主 + 少量 x 方向偏置 (工程渐变感) */
-  vec2 vel = dequantVel(texture(uVelocity, vUv).xy);
+  /* 1. 速度底图: |vel| 为主 + 少量 x 方向偏置 (工程渐变感)
+     4-tap 平滑速度场: 消除 8bit 量化台阶 (vSpan=64 → 0.25 格/秒 步进的横向条纹) */
+  vec2 vX = 1.0 / vec2(textureSize(uVelocity, 0));
+  vec2 vel = 0.25 * (dequantVel(texture(uVelocity, vUv).xy)
+    + dequantVel(texture(uVelocity, vUv + vec2(vX.x, 0.0)).xy)
+    + dequantVel(texture(uVelocity, vUv + vec2(0.0, vX.y)).xy)
+    + dequantVel(texture(uVelocity, vUv + vX).xy));
   float speed = length(vel);
   float speedN = clamp(speed / max(uVelVisScale, 1e-3), 0.0, 1.0);
   float xN = clamp(vel.x / max(uVelVisScale, 1e-3), 0.0, 1.0);
@@ -957,18 +962,14 @@ void main() {
   baseT = baseT * baseT * (3.0 - 2.0 * baseT); /* smoothstep: 消除快慢流之间的硬色界 */
   vec3 col = ramp3(uWindLow, uWindMid, uWindHigh, baseT);
 
-  /* 2. 尾流烟雾: |curl| 主信号 + dye 增强 (4-tap 平滑去 8bit 量化尖峰) */
+  /* 尾流烟雾: 纯染料驱动, 高阈值过滤低强度碎丝 (8bit 下细碎染料量化成麻点)
+     只让密集尾流烟显形 → 参考图式的干净深蓝涡街烟雾 */
   vec2 dTex = 1.0 / vec2(textureSize(uDye, 0));
-  vec2 cTex = 1.0 / vec2(textureSize(uCurl, 0));
-  float curl = (0.25 * (texture(uCurl, vUv).r + texture(uCurl, vUv + vec2(cTex.x, 0.0)).r
-                     + texture(uCurl, vUv + vec2(0.0, cTex.y)).r + texture(uCurl, vUv - cTex).r) - uCurlOff) / uCurlScale;
   float dyeI = 0.25 * (texture(uDye, vUv).r + texture(uDye, vUv + vec2(dTex.x, 0.0)).r
                     + texture(uDye, vUv + vec2(0.0, dTex.y)).r + texture(uDye, vUv - dTex).r);
-  float curlN = smoothstep(3.0, 12.0, abs(curl));
-  float dyeN = smoothstep(0.06, 0.42, dyeI);
-  float smoke = clamp(curlN * 0.7 + dyeN * uDyeGain, 0.0, 1.0);
+  float smoke = smoothstep(0.10, 0.55, dyeI) * 1.25;
   vec3 smokeCol = mix(uSmoke0, uSmoke1, smoothstep(0.30, 1.0, smoke));
-  col = mix(col, smokeCol, uSmokeAlpha * smoothstep(0.15, 0.65, smoke));
+  col = mix(col, smokeCol, uSmokeAlpha * smoothstep(0.12, 0.60, smoke));
 
   /* 3. 速度短线 streak (屏幕网格采样 + SDF 线段) */
   vec4 ob = texture(uObstacle, vUv);
@@ -1017,15 +1018,25 @@ uniform vec2 uCoreRange;
 uniform vec2 uCurlFade;
 ${VIEW_COMMON}
 void main() {
-  vec4 dyeC = texture(uDye, vUv);
-  float dyeI = dyeC.r;
-  float curl = (texture(uCurl, vUv).r - uCurlOff) / uCurlScale;
+  /* 4-tap 平滑: 消除 8bit 量化台阶 + 种子通道单元马赛克 (蜂窝噪点根因) */
+  vec2 dT = 1.0 / vec2(textureSize(uDye, 0));
+  vec4 dyeS = (texture(uDye, vUv)
+    + texture(uDye, vUv + vec2(dT.x, 0.0))
+    + texture(uDye, vUv + vec2(0.0, dT.y))
+    + texture(uDye, vUv + dT)) * 0.25;
+  float dyeI = dyeS.r;
+  vec2 cT = 1.0 / vec2(textureSize(uCurl, 0));
+  float curlRaw = (texture(uCurl, vUv).r
+    + texture(uCurl, vUv + vec2(cT.x, 0.0)).r
+    + texture(uCurl, vUv + vec2(0.0, cT.y)).r
+    + texture(uCurl, vUv + cT).r) * 0.25;
+  float curl = (curlRaw - uCurlOff) / uCurlScale;
   float ac = abs(curl);
-  /* xhigh 第5轮: 涡核检测 (低阈值 0.8→3.2, 高值 fade) + 符号双色 (正=亮蓝, 负=紫) */
-  float core = smoothstep(uCoreRange.x, uCoreRange.y, ac)
-             * (1.0 - smoothstep(uCurlFade.x, uCurlFade.y, ac));
-  vec3 coreCol = mix(uWakeHigh, uWakeMid, curl * 0.5 + 0.5);
-  float curlN = smoothstep(0.8, 14.0, ac) * 0.5 + core * 0.5;
+  /* 涡核: v3 同款指数软饱和 (死区 uCoreRange.x 压掉量化噪声, uCoreRange.y 为增益),
+     无硬阈值台阶 → 不会把 8bit 量化噪声阈值化成盐椒斑点 */
+  float core = 1.0 - exp(-max(ac - uCoreRange.x, 0.0) * uCoreRange.y);
+  vec3 coreCol = mix(uWakeHigh, uWakeMid, curl * 0.05 + 0.5);
+  float curlN = core * 0.35;
   vec2 vel = dequantVel(texture(uVelocity, vUv).xy);
   float speedN = clamp(length(vel) / max(uVelVisScale, 1e-3), 0.0, 1.0);
   float intensity = clamp(dyeI * uDyeGain + curlN * uCurlGain, 0.0, 1.0);
@@ -1035,10 +1046,10 @@ void main() {
   vec3 col = uWakeBg;
   float alpha = smoothstep(0.02, 0.18, intensity) * 0.94;
   col = mix(col, smoke, alpha);
-  /* 涡核提亮: 有染料更亮, 无染料保留弱核 (不依赖 dye>0 才可见) */
+  /* 涡核提亮: 有染料更亮, 无染料保留弱核 */
   col += coreCol * core * (0.30 + 0.70 * dyeI) * 0.55;
-  /* 种子轻微色偏 (多样丰富) */
-  col *= 0.88 + 0.24 * dyeC.b * intensity;
+  /* 种子轻微色偏 (用平滑后的种子, 消除单元边界) */
+  col *= 0.88 + 0.24 * dyeS.b * intensity;
   vec4 ob = texture(uObstacle, vUv);
   col = mix(col, obstacleColor(ob), solidOf(ob));
   col += texture(uBloom, vUv).rgb * uBloomStr;
@@ -1839,7 +1850,7 @@ const AutoDirector = {
           for (let k = 0; k < rows; k++) {
             const y = 0.07 + k * (0.86 / (rows - 1)) + 0.015 * Math.sin(t + k * 1.9);
             const seed = clamp(0.5 + 0.3 * Math.sin(t * 0.7 + k * 0.9), 0.1, 0.9);
-            splat(0.03, y, 0.22 * f, 0, 0.45 * f, 0, seed, 0.010);
+            splat(0.03, y, 0.22 * f, 0, 0.45 * f, 0, seed, 0.012);
           }
           this.nextStreet += 17;
           if (nowMs - this.nextStreet > 1000) { this.nextStreet = nowMs + 17; break; }
@@ -2219,11 +2230,12 @@ function render(nowSec) {
     gl.uniform3f(u.uWakeLow, sp.wakeLow[0], sp.wakeLow[1], sp.wakeLow[2]);
     gl.uniform3f(u.uWakeMid, sp.wakeMid[0], sp.wakeMid[1], sp.wakeMid[2]);
     gl.uniform3f(u.uWakeHigh, sp.wakeHigh[0], sp.wakeHigh[1], sp.wakeHigh[2]);
-    gl.uniform1f(u.uDyeGain, 1.6);
-    gl.uniform1f(u.uCurlGain, 0.8);
-    /* xhigh 第5轮: 涡核检测范围 (8bit 低阈值, float 稍高) */
-    gl.uniform2f(u.uCoreRange, floatFields ? 1.2 : 0.8, floatFields ? 4.0 : 3.2);
-    gl.uniform2f(u.uCurlFade, floatFields ? 18.0 : 14.0, floatFields ? 30.0 : 22.0);
+    /* 尾流视图: 染料主导, 涡核 = v3 同款指数软饱和
+       float: 死区0/增益6.0 (v3 标定); 8bit: 死区3.5 压掉量化噪声地板(4-tap平滑后≈2-3), 只点亮相干涡 */
+    gl.uniform1f(u.uDyeGain, 2.0);
+    gl.uniform1f(u.uCurlGain, 0.45);
+    gl.uniform2f(u.uCoreRange, floatFields ? 0.0 : 3.5, floatFields ? 6.0 : 2.5);
+    gl.uniform2f(u.uCurlFade, 18.0, 28.0);
     blit(displayFBO);
   } else {
     /* 风洞 (默认) */
@@ -2248,8 +2260,9 @@ function render(nowSec) {
     gl.uniform1f(u.uWindXBias, 0.18);
     gl.uniform1f(u.uCurlLow, 2.0);
     gl.uniform1f(u.uCurlHigh, 10.0);
-    gl.uniform1f(u.uSmokeAlpha, smokeOn ? 0.72 : 0.0);
-    gl.uniform1f(u.uDyeGain, 0.55);
+    /* 风洞视图: 干净速度场渐变 + 红色矢量网 (对齐参考图, 上游无染料条带)
+       深蓝尾流由速度 ramp 的慢流端 (windLow) 天然产生; 染料烟雾近乎关闭避免 7 行注入的斑马条带 */
+    gl.uniform1f(u.uSmokeAlpha, smokeOn ? 0.10 : 0.0);
     gl.uniform1f(u.uVignette, 0.30);
     blit(displayFBO);
   }
